@@ -1,0 +1,8 @@
+assets/*
+CMakeFiles/*
+cmake_install.cmake
+main
+Makefile
+renderdoc/
+CMakeCache.txt
+.vscode/*
