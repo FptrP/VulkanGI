@@ -6,3 +6,4 @@ Makefile
 renderdoc/
 CMakeCache.txt
 .vscode/*
+*.spv
