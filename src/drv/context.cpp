@@ -118,27 +118,35 @@ namespace drv {
     return {};
   }
 
-  static void pick_queues(vk::PhysicalDevice &dev, u32 out_family[QUEUE_COUNT]) {
+  static void pick_queues(vk::PhysicalDevice &dev, QueueInfo out_queues[QUEUE_COUNT]) {
     auto queue_families = dev.getQueueFamilyProperties();
     
-    u32 queue_id = 0;
     bool queue_picked[QUEUE_COUNT] {};
-
     bool complete = true;
+    u32 family_index = 0;
 
     for (auto family : queue_families) {
+      u32 queue_index = 0;
 
       if ((family.queueFlags & GRAPHICS_QUEUE_FLAGS) == GRAPHICS_QUEUE_FLAGS) {
-        out_family[(u32)QueueT::Graphics] = queue_id;
+        out_queues[(u32)QueueT::Graphics].family = family_index;
+        out_queues[(u32)QueueT::Graphics].index = queue_index;
         queue_picked[(u32)QueueT::Graphics] = true;
-        std::cout << "GraphicsQueue family " << queue_id << "\n";
-      } else if ((family.queueFlags & TRANSFER_QUEUE_FLAGS) == TRANSFER_QUEUE_FLAGS) {
-        out_family[(u32)QueueT::Transfer] = queue_id;
-        queue_picked[(u32)QueueT::Transfer] = true;
-        std::cout << "TransferQueue family " << queue_id << "\n";
+        family.queueCount--;
+        queue_index++;
+        std::cout << "GraphicsQueue family " << family_index << " index " <<  out_queues[(u32)QueueT::Graphics].index << "\n";
       }
 
-      queue_id++;
+      if ((family.queueFlags & TRANSFER_QUEUE_FLAGS) == TRANSFER_QUEUE_FLAGS && family.queueCount) {
+        out_queues[(u32)QueueT::Transfer].family = family_index;
+        out_queues[(u32)QueueT::Transfer].index = queue_index;
+        queue_picked[(u32)QueueT::Transfer] = true;
+        family.queueCount--;
+        queue_index++;
+        std::cout << "TransferQueue family " << family_index << " index " <<  out_queues[(u32)QueueT::Transfer].index << "\n";
+      }
+
+      family_index++;
 
       complete = true;
 
@@ -158,37 +166,56 @@ namespace drv {
 
   void Context::init_device() {
     physical_device = pick_device(instance);
-    pick_queues(physical_device, queue_family_indexes);
+    pick_queues(physical_device, queue_info);
+    
+    queue_family_indexes.push_back(queue_info[0].family);
+    
+    if (queue_info[1].family != queue_info[0].family) {
+      queue_family_indexes.push_back(queue_info[1].family);
+    }
 
-    auto ok = physical_device.getSurfaceSupportKHR(queue_family_indexes[(u32)QueueT::Graphics], surface);
+    auto ok = physical_device.getSurfaceSupportKHR(queue_info[(u32)QueueT::Graphics].family, surface);
     if (ok != VK_TRUE) {
       throw std::runtime_error {"Device not support Surface!"};
     }
-    vk::DeviceQueueCreateInfo queue_conf[QUEUE_COUNT] {};
-    
+
+    std::vector<vk::DeviceQueueCreateInfo> queue_conf;
+
     auto queue_priorities = {1.f};
 
-    queue_conf[(u32)QueueT::Graphics]
+    if (queue_family_indexes.size() > 1) {
+      queue_conf.resize(2);
+      queue_conf[(u32)QueueT::Graphics]
       .setQueueCount(1)
-      .setQueueFamilyIndex(queue_family_indexes[(u32)QueueT::Graphics])
+      .setQueueFamilyIndex(queue_info[(u32)QueueT::Graphics].family)
       .setQueuePriorities(queue_priorities);
 
-    queue_conf[(u32)QueueT::Transfer]
-      .setQueueCount(1)
-      .setQueueFamilyIndex(queue_family_indexes[(u32)QueueT::Transfer])
-      .setQueuePriorities(queue_priorities);
+      queue_conf[(u32)QueueT::Transfer]
+        .setQueueCount(1)
+        .setQueueFamilyIndex(queue_info[(u32)QueueT::Transfer].family)
+        .setQueuePriorities(queue_priorities);
+    } else {
+      auto queue_priorities = {1.f, 0.5f};
+      vk::DeviceQueueCreateInfo info {};
+      info
+        .setQueueCount(QUEUE_COUNT)
+        .setQueueFamilyIndex(queue_family_indexes[0])
+        .setQueueCount(2)
+        .setQueuePriorities(queue_priorities);
+      queue_conf.push_back(info);
+    }
+    
 
     auto ext = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
     vk::DeviceCreateInfo info {};
     info.setPEnabledExtensionNames(ext);
-    info.setPQueueCreateInfos(queue_conf);
-    info.setQueueCreateInfoCount(QUEUE_COUNT);
+    info.setQueueCreateInfos(queue_conf);
 
     device = physical_device.createDevice(info);
 
     for (u32 i = 0; i < QUEUE_COUNT; i++) {
-      queues[i] = device.getQueue(queue_family_indexes[i], 0);
+      queues[i] = device.getQueue(queue_info[i].family, queue_info[i].index);
     }
   }
 
@@ -245,7 +272,7 @@ namespace drv {
   }
 
   u32 Context::queue_index(QueueT qtype) const {
-    return queue_family_indexes[(u32)qtype];
+    return queue_info[(u32)qtype].family;
   }
 
 }

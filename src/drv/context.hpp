@@ -9,12 +9,17 @@ namespace drv {
   const u32 QUEUE_COUNT = 2;
   
   const vk::QueueFlags GRAPHICS_QUEUE_FLAGS = vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eTransfer;
-  const vk::QueueFlags TRANSFER_QUEUE_FLAGS = vk::QueueFlagBits::eTransfer;
+  const vk::QueueFlags TRANSFER_QUEUE_FLAGS = vk::QueueFlagBits::eTransfer|vk::QueueFlagBits::eGraphics;
 
   enum class QueueT : u32 {
     Graphics = 0,
     Transfer = 1,
     Count
+  };
+
+  struct QueueInfo {
+    u32 family;
+    u32 index;
   };
 
   struct Context {
@@ -31,7 +36,8 @@ namespace drv {
     vk::Extent2D get_swapchain_extent() const { return swapchain_ext; }
 
     u32 queue_index(QueueT qtype) const;
-    const u32* get_queue_indexes() const { return queue_family_indexes; }
+    const u32* get_queue_indexes() const { return queue_family_indexes.data(); }
+    const u32 queue_family_count() const { return queue_family_indexes.size(); }
     
     vk::Queue &get_queue(QueueT qtype) { return queues[(u32)qtype]; }
 
@@ -48,8 +54,9 @@ namespace drv {
 
     vk::Device device;
     vk::PhysicalDevice physical_device;
-    vk::Queue queues[(u32)QueueT::Count];
-    u32 queue_family_indexes[QUEUE_COUNT];
+    vk::Queue queues[QUEUE_COUNT];
+    std::vector<u32> queue_family_indexes;
+    QueueInfo queue_info[QUEUE_COUNT];
 
     vk::SurfaceKHR surface;
     vk::SwapchainKHR swapchain;

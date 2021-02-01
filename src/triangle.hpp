@@ -102,7 +102,9 @@ struct GBufferSubpass {
       vk::SamplerCreateInfo samp_i {};
       samp_i.setMinFilter(vk::Filter::eLinear);
       samp_i.setMagFilter(vk::Filter::eLinear);
-  
+      samp_i.setMipmapMode(vk::SamplerMipmapMode::eLinear);
+      samp_i.setMinLod(0.f);
+      samp_i.setMaxLod(10.f);
       sampler = ds.ctx.get_device().createSampler(samp_i);
 
       auto img  = ds.storage.load_image2D(ds.ctx, "assets/textures/bricks.png");
@@ -188,7 +190,7 @@ private:
         .setBaseArrayLayer(0)
         .setBaseMipLevel(0)
         .setLayerCount(1)
-        .setLevelCount(1);
+        .setLevelCount(~0u);
     
     for (auto &mat : scene.get_materials()) {
       if (mat.albedo_path.empty()) continue;

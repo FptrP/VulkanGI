@@ -49,6 +49,7 @@ namespace drv {
     }
 
     const vk::Image& api_image() const { return handle; }
+    const vk::ImageCreateInfo &get_info() const { return info; }
   private:
     MemoryBlock blk;
     GPUMemoryT mem_type;

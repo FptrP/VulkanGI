@@ -8,12 +8,17 @@ namespace drv {
                            vk::SharingMode mode)
   {
     vk::BufferCreateInfo info {};
-    auto used_queues = { ctx.queue_index(QueueT::Transfer), ctx.queue_index(QueueT::Graphics) };
     
+    if (ctx.queue_family_count() == 1) {
+      mode = vk::SharingMode::eExclusive;
+    }
+
     info.setSharingMode(mode);
     info.setUsage(usage);
     info.setSize(size);
-    info.setQueueFamilyIndices(used_queues);
+    info.setPQueueFamilyIndices(ctx.get_queue_indexes());
+    info.setQueueFamilyIndexCount(ctx.queue_family_count());
+
 
     auto buffer = ctx.get_device().createBuffer(info);
 
