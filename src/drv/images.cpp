@@ -146,7 +146,9 @@ namespace drv {
       throw std::runtime_error {"Sequential transfer not implemented"};
     }
 
+    {
     auto staging_buf = create_buffer(ctx, GPUMemoryT::Coherent, buffsz, vk::BufferUsageFlagBits::eTransferSrc);
+    std::cout << img.get_memory().offset << "\n";
     buffer_memcpy(ctx, staging_buf, 0, pixels, buffsz);
     stbi_image_free(pixels);
 
@@ -210,6 +212,8 @@ namespace drv {
     submit_and_wait(ctx, cmd);
 
     img.layout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    }
+    collect_buffers(ctx);
     return images.create(img);    
   }
 
@@ -235,7 +239,7 @@ namespace drv {
 
     img.layout = vk::ImageLayout::eUndefined;
     img.mem_type = GPUMemoryT::Local;
-
+  
     return images.create(img);
   }
 

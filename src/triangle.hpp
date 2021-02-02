@@ -5,6 +5,7 @@
 #include "scene.hpp"
 
 #include <optional>
+#include <iostream>
 
 struct Vert {
   Vert(f32 x, f32 y, f32 z, f32 u, f32 v) : pos {x, y, z}, uv {u, v} {}
@@ -85,20 +86,6 @@ struct GBufferSubpass {
     pipeline = ds.pipelines.create_pipeline(ds.ctx, desc);
     
     {
-      Vert v[] {
-        {0.0, -0.5, 0.f, 1.f, 0.f,},
-        {0.5, 0.5, 0.f, 0.f, 1.f},
-        {-0.5, 0.5, 0.f, 0.f, 0.f}
-      };
-      auto size = sizeof(v);
-      auto usage = vk::BufferUsageFlagBits::eVertexBuffer|vk::BufferUsageFlagBits::eTransferDst;
-
-      verts = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Local, size, usage);
-
-      ds.storage.buffer_memcpy(ds.ctx, verts, 0, v, size);
-    }
-    
-    {
       vk::SamplerCreateInfo samp_i {};
       samp_i.setMinFilter(vk::Filter::eLinear);
       samp_i.setMagFilter(vk::Filter::eLinear);
@@ -107,7 +94,6 @@ struct GBufferSubpass {
       samp_i.setMaxLod(10.f);
       sampler = ds.ctx.get_device().createSampler(samp_i);
 
-      auto img  = ds.storage.load_image2D(ds.ctx, "assets/textures/bricks.png");
       
       vk::ImageSubresourceRange i_range {};
       i_range
@@ -117,7 +103,6 @@ struct GBufferSubpass {
         .setLayerCount(1)
         .setLevelCount(1);
 
-      texture = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
 
       for (u32 i = 0; i < drv::MAX_FRAMES_IN_FLIGHT; i++) {
         ubo[i] = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(VertexUB), vk::BufferUsageFlagBits::eUniformBuffer);
@@ -151,7 +136,7 @@ struct GBufferSubpass {
   }
 
   void update(float dt) {
-    time += dt;
+
   }
 
   void render(drv::DrawContext &draw_ctx, DriverState &ds) {
@@ -208,8 +193,6 @@ private:
     texture_set = ds.descriptors.allocate_set(ds.ctx, tex_layout);
   }
 
-  float time = 0.f;
-
   struct VertexUB {
     glm::mat4 camera;
   };
@@ -223,8 +206,6 @@ private:
   std::vector<drv::ImageViewID> images;
 
   drv::BufferID ubo[drv::MAX_FRAMES_IN_FLIGHT];
-  drv::BufferID verts;
-  drv::ImageViewID texture;
   vk::Sampler sampler;
 
   FrameGlobal &frame_data;

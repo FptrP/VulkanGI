@@ -30,6 +30,9 @@ namespace drv {
     bool free(vk::DeviceSize address);
 
   private:
+    void fast_defrag();
+    void full_defrag();
+
     std::map<vk::DeviceSize, MemoryBlock> used_blocks;
     std::list<MemoryBlock> free_blocks;
     MemoryBlock base;

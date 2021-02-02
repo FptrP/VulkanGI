@@ -1,5 +1,7 @@
 #include "memory.hpp"
 
+#include <iostream>
+
 namespace drv {
 
   static vk::DeviceSize get_alignment_offs(vk::DeviceSize offset, vk::DeviceSize alignment) {
@@ -51,6 +53,7 @@ namespace drv {
     }
 
     auto block = *alloc;
+    free_blocks.erase(alloc);
     auto delta = get_alignment_offs(block.offset, alignment);
 
     MemoryBlock allocated;
@@ -82,7 +85,31 @@ namespace drv {
     auto block = iter->second;
     used_blocks.erase(iter);
     free_blocks.push_back(block);
+    fast_defrag();
     return true;
+  }
+
+  void FreeListAllocator::fast_defrag() {
+    if (free_blocks.size() < 2) return;
+
+    auto iter = free_blocks.begin();
+    auto first  = *iter;
+    iter++; 
+    auto second = *iter;
+    
+
+    if (second.offset < first.offset) { std::swap(first, second); }
+
+    if (first.offset + first.size == second.offset) {
+      free_blocks.pop_front();
+      free_blocks.pop_front();
+      first.size += second.size;
+      free_blocks.push_front(first);
+    }
+  }
+
+  void FreeListAllocator::full_defrag() {
+
   }
 
   void GPUMemory::init(Context &ctx, vk::DeviceSize coherent_budget, vk::DeviceSize local_budget) {

@@ -56,7 +56,7 @@ namespace drv {
   }
 
   void ResourceStorage::init(Context &ctx) {
-    memory.init(ctx, 32u<<20u, 128u<<20u);
+    memory.init(ctx, 128u<<20u, 512u<<20u);
 
     vk::CommandPoolCreateInfo info {};
     info.setQueueFamilyIndex(ctx.queue_index(QueueT::Transfer));

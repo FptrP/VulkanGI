@@ -138,7 +138,7 @@ struct RCId {
     if (storage) storage->dec_ref(*this);
     storage = nullptr;
   }
-
+  u32 debug_index() const { return index; }
 private:
   friend RCStorage<T>;
   
