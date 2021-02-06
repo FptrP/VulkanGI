@@ -105,6 +105,7 @@ namespace drv {
     ImageID create_image(Context &ctx, const vk::ImageCreateInfo &info, const void *pixels = nullptr);
     ImageID load_image2D(Context &ctx, const char *path);
     ImageID create_depth2D_rt(Context &ctx, u32 width, u32 height);
+    ImageID create_rt(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage);
 
     ImageViewID create_image_view(Context &ctx, const ImageID &img, const vk::ImageViewType &t, const vk::ImageSubresourceRange &range, vk::ComponentMapping map = {});
     ImageViewID create_rt_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, vk::ComponentMapping map = {});

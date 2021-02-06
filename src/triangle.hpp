@@ -74,6 +74,7 @@ struct GBufferSubpass {
 
       .set_blend_logic_op(false)
       .add_blend_attachment()
+      .add_blend_attachment()
       .set_blend_constants(1.f, 1.f, 1.f, 1.f)
 
       .set_depth_test(true)

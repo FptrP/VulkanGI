@@ -81,6 +81,16 @@ namespace drv {
     return *this;
   }
 
+  DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::add_input_attachment(u32 binding, vk::ShaderStageFlags stages) {
+    vk::DescriptorSetLayoutBinding elem {};
+    elem.setBinding(binding);
+    elem.setDescriptorCount(1);
+    elem.setDescriptorType(vk::DescriptorType::eInputAttachment);
+    elem.setStageFlags(stages);
+    bindings.push_back(elem);
+    return *this;
+  }
+
   vk::DescriptorSetLayoutCreateInfo DescriptorSetLayoutBuilder::build() {
     vk::DescriptorSetLayoutCreateInfo info {};
     info.setBindings(bindings);

@@ -18,6 +18,8 @@ namespace drv {
     Self add_storage_buffer(u32 binding, vk::ShaderStageFlags stages);
     Self add_sampler(u32 binding, vk::ShaderStageFlags stages);
     Self add_array_of_tex(u32 binding, u32 count, vk::ShaderStageFlags stages);
+    Self add_input_attachment(u32 binding, vk::ShaderStageFlags stages);
+    
     vk::DescriptorSetLayoutCreateInfo build();
   
   private:
@@ -131,6 +133,8 @@ namespace drv {
     
     PipelineDescBuilder() {
       desc.raster.setLineWidth(1.f);
+      desc.input.attributes.clear();
+      desc.input.bindings.clear();
       //desc.raster.setRasterizerDiscardEnable(VK_TRUE);
     }
 

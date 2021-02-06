@@ -6,6 +6,7 @@
 
 #include "driverstate.hpp"
 #include "triangle.hpp"
+#include "shading.hpp"
 
 enum class RenderEvents {
   None = 0,
@@ -25,6 +26,8 @@ struct Renderer {
   void main_loop();
 
 private:
+  void create_framebuffers(std::vector<vk::Framebuffer> &fb);
+
   DriverState ds;
 
   SDL_Window *window = nullptr;
@@ -32,6 +35,7 @@ private:
   std::atomic<u32> events_msk;
   FrameGlobal frame_data;
   GBufferSubpass *gbuffer_subpass = nullptr;
+  ShadingPass *shading_subpass = nullptr;
 };
 
 #endif

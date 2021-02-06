@@ -41,6 +41,8 @@ namespace drv {
   }
 
   vk::Pipeline PipelineManager::create_pipeline(Context &ctx, PipelineManager::PipelineDesc &desc) {
+    bool has_vertex_input = !desc.input.bindings.empty() && !desc.input.attributes.empty();
+    
     vk::PipelineVertexInputStateCreateInfo input {};
     input
       .setVertexAttributeDescriptions(desc.input.attributes)

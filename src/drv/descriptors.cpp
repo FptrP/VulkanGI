@@ -213,6 +213,26 @@ namespace drv {
     return *this;
   }
 
+  DescriptorBinder &DescriptorBinder::bind_input_attachment(u32 slot, const vk::ImageView &view, vk::ImageLayout layout) {
+    vk::DescriptorImageInfo info {};
+    info
+      .setImageView(view)
+      .setImageLayout(layout);
+
+    images.push_back(std::unique_ptr<vk::DescriptorImageInfo>{new vk::DescriptorImageInfo{info}});
+    
+    vk::WriteDescriptorSet write {};
+    write
+      .setDstSet(dst)
+      .setDstBinding(slot)
+      .setDescriptorType(vk::DescriptorType::eInputAttachment)
+      .setDescriptorCount(1)
+      .setPImageInfo(images[images.size() - 1].get());
+    
+    writes.push_back(write);
+    return *this;
+  }
+
   void DescriptorBinder::write(Context &ctx) {
     ctx.get_device().updateDescriptorSets(writes, {});
   }

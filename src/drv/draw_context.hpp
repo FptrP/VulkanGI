@@ -16,6 +16,14 @@ namespace drv {
   };
 
   struct DrawContextPool {
+    void init_backbuffer_views(Context &ctx);
+    void init(Context &ctx, const std::vector<vk::Framebuffer> &fb);
+
+    const std::vector<vk::ImageView> get_backbuffer_views() const {
+      return backbuffer_images;
+    }
+
+
     void init(Context &ctx, vk::RenderPass &pass);
     void init(Context &ctx, vk::RenderPass &pass, ResourceStorage &storage);
 
@@ -25,6 +33,7 @@ namespace drv {
     void submit(Context &ctx, DrawContext &dctx);
 
   private:
+    void create_sync_resources(Context &ctx);
     void create_depth_buffers(Context &ctx, ResourceStorage &storage);
 
     vk::CommandPool buffer_pool;

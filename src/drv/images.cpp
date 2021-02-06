@@ -218,8 +218,12 @@ namespace drv {
   }
 
   ImageID ResourceStorage::create_depth2D_rt(Context &ctx, u32 width, u32 height) {
+    return create_rt(ctx, width, height, vk::Format::eD24UnormS8Uint, vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eDepthStencilAttachment);
+  }
+
+  ImageID ResourceStorage::create_rt(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage) {
     Image img;
-    img.info.format = vk::Format::eD24UnormS8Uint;
+    img.info.format = fmt;
     img.info.imageType = vk::ImageType::e2D;
     img.info.initialLayout = vk::ImageLayout::eUndefined;
     img.info.extent = vk::Extent3D {width, height, 1};
@@ -230,7 +234,7 @@ namespace drv {
       .setPQueueFamilyIndices(ctx.get_queue_indexes())
       .setSamples(vk::SampleCountFlagBits::e1)
       .setTiling(vk::ImageTiling::eOptimal)
-      .setUsage(vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eDepthStencilAttachment);
+      .setUsage(usage);
     
     img.handle = ctx.get_device().createImage(img.info);
     auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);

@@ -117,6 +117,7 @@ struct RCId {
 
   ~RCId() {
     if (storage) storage->dec_ref(*this);
+    storage = nullptr;
   }
 
   bool operator==(const RCId<T> &id) {

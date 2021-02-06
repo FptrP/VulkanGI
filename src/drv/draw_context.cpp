@@ -2,7 +2,7 @@
 #include <iostream>
 namespace drv {
 
-  void DrawContextPool::init(Context &ctx, vk::RenderPass &pass) {
+  void DrawContextPool::init_backbuffer_views(Context &ctx) {
     auto &images = ctx.get_swapchain_images();
 
     for (auto &img : images) {
@@ -22,6 +22,19 @@ namespace drv {
       
       backbuffer_images.push_back(ctx.get_device().createImageView(info));
     }
+  }
+
+  void DrawContextPool::init(Context &ctx, const std::vector<vk::Framebuffer> &fb) {
+    if (fb.size() != backbuffer_images.size()) {
+      throw std::runtime_error {"Not enougth framebuffers"};
+    }
+  
+    backbuffers = fb;
+    create_sync_resources(ctx);
+  }
+
+  void DrawContextPool::init(Context &ctx, vk::RenderPass &pass) {
+    init_backbuffer_views(ctx);
 
     auto ext = ctx.get_swapchain_extent();
     auto has_depth = !backbuffer_depth.empty();
@@ -44,6 +57,10 @@ namespace drv {
       backbuffers.push_back(ctx.get_device().createFramebuffer(info));
     }
 
+    create_sync_resources(ctx);
+  }
+
+  void DrawContextPool::create_sync_resources(Context &ctx) {
     {
       vk::CommandPoolCreateInfo info {};
       info.setQueueFamilyIndex(ctx.queue_index(QueueT::Graphics));
@@ -69,7 +86,6 @@ namespace drv {
         image_awailable[i] = ctx.get_device().createSemaphore(info);
         submit_done[i] = ctx.get_device().createSemaphore(info);
         frame_done[i] = ctx.get_device().createFence(fence);
-
       }  
     }
   }
@@ -98,6 +114,7 @@ namespace drv {
     }
 
     ctx.get_device().destroyCommandPool(buffer_pool);
+
     for (u32 i = 0; i < backbuffer_images.size(); i++) {
       ctx.get_device().destroyFramebuffer(backbuffers[i]);
       ctx.get_device().destroyImageView(backbuffer_images[i]);

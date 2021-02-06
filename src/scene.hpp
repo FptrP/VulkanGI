@@ -34,6 +34,7 @@ struct SceneVertex {
 
 struct SceneMaterial {
   std::string albedo_path;
+  std::string mr_path;
 };
 
 struct Scene {

@@ -9,8 +9,8 @@ void Scene::load(const std::string &path, const std::string &folder) {
   auto aiscene = importer.ReadFile(path, aiProcess_GenSmoothNormals|aiProcess_Triangulate| aiProcess_SortByPType | aiProcess_FlipUVs);
   model_path = folder;
 
-  process_meshes(aiscene);
   process_materials(aiscene);
+  process_meshes(aiscene);
   process_objects(aiscene->mRootNode, glm::identity<glm::mat4>());
 
   std::cout << "Total " << objects.size() << " objects\n";
