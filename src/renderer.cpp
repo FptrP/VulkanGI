@@ -9,11 +9,7 @@ void Renderer::init(SDL_Window *w) {
   ds.main_renderpass = create_main_renderpass();
   frame_data.init(ds);
 
-  std::vector<vk::Framebuffer> fb;
-  ds.submit_pool.init_backbuffer_views(ds.ctx);
-  create_framebuffers(fb);
-  ds.submit_pool.init(ds.ctx, fb);
-  
+  ds.submit_pool.init(ds.ctx, ds.main_renderpass);
   
   gbuffer_subpass = new GBufferSubpass{frame_data};
   gbuffer_subpass->init(ds);
@@ -36,115 +32,49 @@ void Renderer::release() {
 }
 
 vk::RenderPass Renderer::create_main_renderpass() {
-  vk::AttachmentDescription albedo_desc {};
-  albedo_desc
-    .setInitialLayout(vk::ImageLayout::eUndefined)
-    .setFinalLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-    .setFormat(vk::Format::eR8G8B8A8Srgb)
-    .setLoadOp(vk::AttachmentLoadOp::eClear)
-    .setStoreOp(vk::AttachmentStoreOp::eDontCare)
-    .setSamples(vk::SampleCountFlagBits::e1)
-    .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
-    .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
 
-  vk::AttachmentDescription normal_desc = albedo_desc;
-  normal_desc.setFormat(vk::Format::eR16G16B16A16Sfloat);
-  
-  vk::AttachmentDescription worldpos_desc = normal_desc;
-  
-  vk::AttachmentDescription depth_desc = albedo_desc;
-  depth_desc.setFormat(vk::Format::eD24UnormS8Uint);
-  
-  vk::AttachmentDescription backbuf_desc = albedo_desc;
+  vk::AttachmentDescription backbuf_desc{};
   backbuf_desc
+  .setInitialLayout(vk::ImageLayout::eUndefined)
+  .setFinalLayout(vk::ImageLayout::ePresentSrcKHR)
   .setFormat(ds.ctx.get_swapchain_fmt())
   .setLoadOp(vk::AttachmentLoadOp::eDontCare)
   .setStoreOp(vk::AttachmentStoreOp::eStore)
-  .setFinalLayout(vk::ImageLayout::ePresentSrcKHR);
+  .setSamples(vk::SampleCountFlagBits::e1)
+  .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
+  .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
 
-  auto attachments = {albedo_desc, normal_desc, worldpos_desc, depth_desc, backbuf_desc};
+  auto attachments = {backbuf_desc};
 
-  vk::AttachmentReference gbuf_albedo {}, gbuf_normal {}, gbuf_depth {}, out_color {}, shading_albedo {}, shading_normal {}, shading_depth{};
-  vk::AttachmentReference gbuf_worldpos {}, shading_worldpos {};
-  
-  gbuf_albedo
-    .setAttachment(0)
-    .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
-  
-  gbuf_normal
-    .setAttachment(1)
-    .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
-
-  gbuf_depth
-    .setAttachment(3)
-    .setLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
-  
-  shading_albedo
-    .setAttachment(0)
-    .setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-  
-  shading_normal
-    .setAttachment(1)
-    .setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-
-  shading_depth
-    .setAttachment(3)
-    .setLayout(vk::ImageLayout::eDepthStencilReadOnlyOptimal);
-
+  vk::AttachmentReference out_color {};
   out_color
     .setLayout(vk::ImageLayout::eColorAttachmentOptimal)
-    .setAttachment(4);
-  
-  gbuf_worldpos
-    .setAttachment(2)
-    .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
+    .setAttachment(0);
 
-  shading_worldpos
-    .setAttachment(2)
-    .setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-
-  auto gbuf_attachments = {gbuf_albedo, gbuf_normal, gbuf_worldpos};
-  auto gbuf_out = {shading_albedo, shading_normal, shading_worldpos, shading_depth};
   auto out_attachments = {out_color};
-
-  vk::SubpassDescription gbuf_pass {};
-  gbuf_pass
-    .setColorAttachments(gbuf_attachments)
-    .setPDepthStencilAttachment(&gbuf_depth)
-    .setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
 
   vk::SubpassDescription shading_pass {};
   shading_pass
-    .setColorAttachments(out_color)
     .setPipelineBindPoint(vk::PipelineBindPoint::eGraphics)
-    .setInputAttachments(gbuf_out)
     .setColorAttachments(out_attachments);
 
-  auto subpasses = {gbuf_pass, shading_pass};
+  auto subpasses = {shading_pass};
 
-  vk::SubpassDependency out_dep {};
-  out_dep
-    .setSrcSubpass(VK_SUBPASS_EXTERNAL)
-    .setDstSubpass(0)
-    .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests)
-    .setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests)
-    .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite|vk::AccessFlagBits::eDepthStencilAttachmentWrite);
-
-  vk::SubpassDependency gbuf_dep {};
-  gbuf_dep
-    .setSrcSubpass(0)
-    .setDstSubpass(1)
-    .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests)
-    .setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader)
+  vk::SubpassDependency dep {};
+  dep
     .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite|vk::AccessFlagBits::eDepthStencilAttachmentWrite)
-    .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+    .setSrcStageMask(vk::PipelineStageFlagBits::eAllGraphics)
+    .setDstAccessMask(vk::AccessFlagBits::eShaderRead)
+    .setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader)
+    .setSrcSubpass(VK_SUBPASS_EXTERNAL)
+    .setDstSubpass(0);
 
-  auto dep = {out_dep, gbuf_dep};
+  auto dependencies = {dep};
 
   vk::RenderPassCreateInfo info {};
   info
+    .setDependencies(dependencies)
     .setAttachments(attachments)
-    .setDependencies(dep)
     .setSubpasses(subpasses);
 
   return ds.ctx.get_device().createRenderPass(info);
@@ -189,12 +119,12 @@ void Renderer::handle_event(const SDL_Event &event) {
 }
 
 void Renderer::render(drv::DrawContext &dctx) {
+  gbuffer_subpass->render(dctx, ds);
+  
   vk::ClearValue color {};
   color.color.setFloat32({0.f, 0.f, 0.f, 0.f});
         
-  vk::ClearValue depth_clear {};
-  depth_clear.depthStencil.setDepth(1.f);
-  auto clear_vals = {color, color, color, depth_clear, color};
+  auto clear_vals = {color};
 
   vk::RenderPassBeginInfo info {};
   info.setRenderPass(ds.main_renderpass);
@@ -204,12 +134,8 @@ void Renderer::render(drv::DrawContext &dctx) {
       
   dctx.dcb.beginRenderPass(info, vk::SubpassContents::eInline);
 
-  gbuffer_subpass->render(dctx, ds);
-  
-  dctx.dcb.nextSubpass(vk::SubpassContents::eInline);
-
   shading_subpass->render(dctx, ds);
-
+  
   dctx.dcb.endRenderPass();
   dctx.dcb.end();
 }

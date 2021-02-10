@@ -8,8 +8,8 @@ const vec2 in_pos[] = vec2[](
 
 const vec2 in_uv[] = vec2[](
   vec2(0, 0),
-  vec2(2, 0),
-  vec2(0, 2)
+  vec2(0, 2),
+  vec2(2, 0)
 );
 
 layout(location = 0) out vec2 uv;

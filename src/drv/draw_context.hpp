@@ -33,6 +33,7 @@ namespace drv {
     vk::CommandBuffer start_cmd(Context &ctx);
     vk::Fence submit_cmd(Context &ctx, vk::CommandBuffer cmd);
     void free_cmd(Context &ctx, vk::CommandBuffer cmd);
+    
   private:
     void create_sync_resources(Context &ctx);
     void create_depth_buffers(Context &ctx, ResourceStorage &storage);

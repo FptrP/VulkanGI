@@ -25,35 +25,35 @@ struct GBuffer {
   vk::Sampler sampler; 
   std::vector<drv::ImageViewID> images; //albedo, normal, world_pos, depth
 
-  void init(DriverState &ds) {
+  void init(DriverState &ds, vk::RenderPass rp = {}) {
     auto screen = ds.ctx.get_swapchain_extent();
     auto albedo_img = ds.storage.create_rt(
       ds.ctx, 
       screen.width, 
       screen.height, 
       vk::Format::eR8G8B8A8Srgb, 
-      vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eColorAttachment);
+      vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eColorAttachment);
 
     auto normal_img = ds.storage.create_rt(
       ds.ctx, 
       screen.width, 
       screen.height, 
       vk::Format::eR16G16B16A16Sfloat, 
-      vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eColorAttachment);
+      vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eColorAttachment);
     
     auto worldpos_img = ds.storage.create_rt(
       ds.ctx, 
       screen.width, 
       screen.height, 
       vk::Format::eR16G16B16A16Sfloat, 
-      vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eColorAttachment);
+      vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eColorAttachment);
     
     auto depth_img = ds.storage.create_rt(
       ds.ctx, 
       screen.width, 
       screen.height, 
       vk::Format::eD24UnormS8Uint, 
-      vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eDepthStencilAttachment);
+      vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eDepthStencilAttachment);
 
     auto albedo_view = ds.storage.create_rt_view(ds.ctx, albedo_img, vk::ImageAspectFlagBits::eColor);
     auto normal_view = ds.storage.create_rt_view(ds.ctx, normal_img, vk::ImageAspectFlagBits::eColor);
@@ -83,11 +83,11 @@ struct GBuffer {
 
 struct FrameGlobal {
   void init(DriverState &ds) {
-    gbuffer.init(ds);
+    
   }
 
   void release(DriverState &ds) {
-    gbuffer.release(ds);
+    
   }
 
   void update(float dt) {

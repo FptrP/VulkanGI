@@ -24,10 +24,10 @@ struct ShadingPass {
   void create_shader_desc(DriverState &ds, FrameGlobal &frame) {
     drv::DescriptorSetLayoutBuilder tex {};
     tex
-      .add_input_attachment(0, vk::ShaderStageFlagBits::eFragment)
-      .add_input_attachment(1, vk::ShaderStageFlagBits::eFragment)
-      .add_input_attachment(2, vk::ShaderStageFlagBits::eFragment)
-      .add_input_attachment(3, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(0, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(2, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(3, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment);
     
     tex_layout = ds.descriptors.create_layout(ds.ctx, tex.build(), 1);
@@ -37,10 +37,10 @@ struct ShadingPass {
 
     drv::DescriptorBinder binder {ds.descriptors.get(tex_set)};
     binder
-      .bind_input_attachment(0, gbuff.images[0]->api_view())
-      .bind_input_attachment(1, gbuff.images[1]->api_view())
-      .bind_input_attachment(2, gbuff.images[2]->api_view())
-      .bind_input_attachment(3, gbuff.images[3]->api_view())
+      .bind_combined_img(0, gbuff.images[0]->api_view(), gbuff.sampler)
+      .bind_combined_img(1, gbuff.images[1]->api_view(), gbuff.sampler)
+      .bind_combined_img(2, gbuff.images[2]->api_view(), gbuff.sampler)
+      .bind_combined_img(3, gbuff.images[3]->api_view(), gbuff.sampler)
       .bind_combined_img(4, frame_data.get_cubemap()->api_view(), gbuff.sampler);
       
     binder.write(ds.ctx);
@@ -89,7 +89,7 @@ struct ShadingPass {
       .set_depth_func(vk::CompareOp::eNever)
       .set_depth_write(false)
 
-      .attach_to_renderpass(ds.main_renderpass, 1)
+      .attach_to_renderpass(ds.main_renderpass, 0)
       .set_layout(pipeline_layout);
 
     pipeline = ds.pipelines.create_pipeline(ds.ctx, builder);
