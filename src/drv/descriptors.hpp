@@ -48,8 +48,9 @@ namespace drv {
   };
 
   struct DescriptorSetID {
-  private:
     DescriptorSetID() {}
+  private:
+    
     
     u32 pool_index;
     u32 desc_index;

@@ -173,4 +173,34 @@ namespace drv {
 
     frame_id = (frame_id + 1) % MAX_FRAMES_IN_FLIGHT;
   }
+
+  vk::CommandBuffer DrawContextPool::start_cmd(Context &ctx) {
+    
+    vk::CommandBufferAllocateInfo info {};
+    info
+      .setCommandBufferCount(1)
+      .setCommandPool(buffer_pool)
+      .setLevel(vk::CommandBufferLevel::ePrimary);
+    
+    auto buffers = ctx.get_device().allocateCommandBuffers(info);
+    return buffers[0];
+  }
+
+  vk::Fence DrawContextPool::submit_cmd(Context &ctx, vk::CommandBuffer cmd) {
+    auto buffers = {cmd};
+    
+    vk::SubmitInfo info {};
+    info.setCommandBuffers(buffers);
+
+    vk::FenceCreateInfo fence_info {};
+    
+    auto fence = ctx.get_device().createFence(fence_info);
+    ctx.get_queue(QueueT::Graphics).submit(info, fence);
+    return fence;
+  }
+
+  void DrawContextPool::free_cmd(Context &ctx, vk::CommandBuffer cmd) {
+    ctx.get_device().freeCommandBuffers(buffer_pool, {cmd});
+    //ctx.get_device().trimCommandPool(buffer_pool, vk::CommandPoolTrimFlags(0));
+  }
 }

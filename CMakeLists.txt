@@ -29,6 +29,8 @@ set(SOURCES
   src/main.cpp
   src/renderer.cpp
   src/scene.cpp
+  src/gbufferpass.cpp
+  src/cubemap_shadow.cpp
   src/drv/context.cpp
   src/drv/draw_context.cpp
   src/drv/pipeline.cpp
@@ -37,6 +39,7 @@ set(SOURCES
   src/drv/pipeline_layout.cpp
   src/drv/descriptors.cpp
   src/drv/images.cpp
+  src/drv/cmd_utils.cpp
 )
 
 add_executable(main ${SOURCES})

@@ -1,4 +1,6 @@
 #include "resources.hpp"
+#include "cmd_utils.hpp"
+
 #include <iostream>
 #include <cmath>
 
@@ -147,72 +149,57 @@ namespace drv {
     }
 
     {
-    auto staging_buf = create_buffer(ctx, GPUMemoryT::Coherent, buffsz, vk::BufferUsageFlagBits::eTransferSrc);
-    std::cout << img.get_memory().offset << "\n";
-    buffer_memcpy(ctx, staging_buf, 0, pixels, buffsz);
-    stbi_image_free(pixels);
+      auto staging_buf = create_buffer(ctx, GPUMemoryT::Coherent, buffsz, vk::BufferUsageFlagBits::eTransferSrc);
+      buffer_memcpy(ctx, staging_buf, 0, pixels, buffsz);
+      stbi_image_free(pixels);
 
-    auto cmd  = begin_transfer(ctx);
+      auto cmd  = begin_transfer(ctx);
+
+      ImageBarrier transfer_barrier {img.handle, vk::ImageAspectFlagBits::eColor};
+      transfer_barrier
+        .set_range(0, mip_levels)
+        .change_layout(vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal)
+        .write(cmd, vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer);
+      
+      vk::ImageSubresourceRange img_range {};
+      img_range
+        .setLevelCount(mip_levels)
+        .setLayerCount(1)
+        .setBaseArrayLayer(0)
+        .setBaseMipLevel(0)
+        .setAspectMask(vk::ImageAspectFlagBits::eColor);
+
+      vk::ImageSubresourceLayers layers {};
+      layers
+        .setMipLevel(0)
+        .setBaseArrayLayer(0)
+        .setLayerCount(1)
+        .setAspectMask(vk::ImageAspectFlagBits::eColor);
+
+      vk::BufferImageCopy copy;
+      copy
+        .setBufferOffset(0)
+        .setBufferImageHeight(img.info.extent.height)
+        .setBufferRowLength(img.info.extent.width)
+        .setImageExtent(img.info.extent)
+        .setImageOffset({0, 0, 0})
+        .setImageSubresource(layers);
+      auto regions = {copy};
+
+      cmd.copyBufferToImage(staging_buf->api_buffer(), img.handle, vk::ImageLayout::eTransferDstOptimal, regions);
     
-    vk::ImageSubresourceRange img_range {};
-    img_range
-      .setLevelCount(mip_levels)
-      .setLayerCount(1)
-      .setBaseArrayLayer(0)
-      .setBaseMipLevel(0)
-      .setAspectMask(vk::ImageAspectFlagBits::eColor);
+      gen_mipmaps(img, cmd);
 
-    vk::ImageMemoryBarrier transfer_barrier {};
-    transfer_barrier.setImage(img.handle);
-    transfer_barrier.setOldLayout(vk::ImageLayout::eUndefined);
-    transfer_barrier.setNewLayout(vk::ImageLayout::eTransferDstOptimal);
-    transfer_barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-    transfer_barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-    transfer_barrier.setSubresourceRange(img_range);
+      ImageBarrier shader_barrier {img.handle, vk::ImageAspectFlagBits::eColor};
+      shader_barrier
+        .set_range(0, mip_levels)
+        .change_layout(vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal)
+        .write(cmd, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eBottomOfPipe);
 
-    cmd.pipelineBarrier(
-      vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer, 
-      (vk::DependencyFlags)0, 0, nullptr, 0, nullptr, 1, &transfer_barrier);
-    
-    vk::ImageSubresourceLayers layers {};
-    layers
-      .setMipLevel(0)
-      .setBaseArrayLayer(0)
-      .setLayerCount(1)
-      .setAspectMask(vk::ImageAspectFlagBits::eColor);
-
-    vk::BufferImageCopy copy;
-    copy
-      .setBufferOffset(0)
-      .setBufferImageHeight(img.info.extent.height)
-      .setBufferRowLength(img.info.extent.width)
-      .setImageExtent(img.info.extent)
-      .setImageOffset({0, 0, 0})
-      .setImageSubresource(layers);
-    auto regions = {copy};
-
-    cmd.copyBufferToImage(staging_buf->api_buffer(), img.handle, vk::ImageLayout::eTransferDstOptimal, regions);
-    
-    gen_mipmaps(img, cmd);
-
-    vk::ImageMemoryBarrier shader_barrier {};
-    shader_barrier.setImage(img.handle);
-    shader_barrier.setOldLayout(vk::ImageLayout::eTransferSrcOptimal);
-    shader_barrier.setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-    shader_barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-    shader_barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-    shader_barrier.setSubresourceRange(img_range);
-    
-    cmd.pipelineBarrier(
-      vk::PipelineStageFlagBits::eTransfer,
-      vk::PipelineStageFlagBits::eBottomOfPipe, 
-      (vk::DependencyFlags)0, 0, nullptr, 
-      0, nullptr, 1, &shader_barrier);
-    
-    submit_and_wait(ctx, cmd);
-
-    img.layout = vk::ImageLayout::eShaderReadOnlyOptimal;
+      submit_and_wait(ctx, cmd);
+      img.layout = vk::ImageLayout::eShaderReadOnlyOptimal;
     }
+
     collect_buffers(ctx);
     return images.create(img);    
   }
@@ -247,6 +234,35 @@ namespace drv {
     return images.create(img);
   }
 
+  ImageID ResourceStorage::create_cubemap(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage) {
+    Image img;
+    img.info.format = fmt;
+    img.info.imageType = vk::ImageType::e2D;
+    img.info.initialLayout = vk::ImageLayout::eUndefined;
+    img.info.extent = vk::Extent3D {width, height, 1};
+    img.info.mipLevels = 1;
+    img.info.arrayLayers = 6;
+    img.info
+      .setQueueFamilyIndexCount(ctx.queue_family_count())
+      .setPQueueFamilyIndices(ctx.get_queue_indexes())
+      .setSamples(vk::SampleCountFlagBits::e1)
+      .setTiling(vk::ImageTiling::eOptimal)
+      .setFlags(vk::ImageCreateFlagBits::eCubeCompatible)
+      .setUsage(usage);
+    
+    
+
+    img.handle = ctx.get_device().createImage(img.info);
+    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
+    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
+    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
+
+    img.layout = vk::ImageLayout::eUndefined;
+    img.mem_type = GPUMemoryT::Local;
+  
+    return images.create(img);
+  }
+
   ImageViewID ResourceStorage::create_rt_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, vk::ComponentMapping map) {
     vk::ImageSubresourceRange range {};
     range
@@ -267,94 +283,62 @@ namespace drv {
     u32 height = info.extent.height;
 
     for (u32 lvl = 1; lvl < info.mipLevels; lvl++) {
-      vk::ImageSubresourceRange from {};
 
-      from
-        .setAspectMask(vk::ImageAspectFlagBits::eColor)
-        .setBaseArrayLayer(0)
-        .setLayerCount(1)
-        .setBaseMipLevel(lvl - 1)
-        .setLevelCount(1);
-      
-      vk::ImageMemoryBarrier to_src {};
+      ImageBarrier to_src {img.api_image(), vk::ImageAspectFlagBits::eColor};
       to_src
-        .setImage(img.api_image())
-        .setOldLayout(vk::ImageLayout::eTransferDstOptimal)
-        .setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
-        .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
-        .setDstAccessMask(vk::AccessFlagBits::eTransferRead)
-        .setSubresourceRange(from);
-
-      cmd.pipelineBarrier(
-        vk::PipelineStageFlagBits::eTransfer,
-        vk::PipelineStageFlagBits::eTransfer,
-        (vk::DependencyFlags)0,
-        {},
-        {}, {to_src});
-
-      vk::ImageBlit region {};
-
-      vk::ImageSubresourceLayers src_layer {}, dst_layer {};
-
-      src_layer
-        .setAspectMask(vk::ImageAspectFlagBits::eColor)
-        .setBaseArrayLayer(0)
-        .setLayerCount(1)
-        .setMipLevel(lvl - 1);
-
-      dst_layer
-        .setAspectMask(vk::ImageAspectFlagBits::eColor)
-        .setBaseArrayLayer(0)
-        .setLayerCount(1)
-        .setMipLevel(lvl);
-
+        .access_msk(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead)
+        .set_range(lvl - 1, 1)
+        .change_layout(vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal)
+        .write(cmd, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer);
+      
       u32 w2 = max(width/2u, 1u);
       u32 h2 = max(height/2u, 1u);
-      
+
+      BlitImage region {img.api_image(), img.api_image()};
+
       region
-        .setSrcSubresource(src_layer)
-        .setDstSubresource(dst_layer)
-        .setSrcOffsets({vk::Offset3D{0, 0, 0}, vk::Offset3D{width, height, 1}})
-        .setDstOffsets({vk::Offset3D{0, 0, 0}, vk::Offset3D{w2, h2, 1}});
+        .src_offset(vk::Offset3D{0, 0, 0}, vk::Offset3D{(i32)width, (i32)height, 1})
+        .dst_offset(vk::Offset3D{0, 0, 0}, vk::Offset3D{(i32)w2, (i32)h2, 1})
+        .src_subresource(vk::ImageAspectFlagBits::eColor, lvl - 1)
+        .dst_subresource(vk::ImageAspectFlagBits::eColor, lvl);
       
-      cmd.blitImage(
-        img.api_image(), 
-        vk::ImageLayout::eTransferSrcOptimal, 
-        img.api_image(), 
-        vk::ImageLayout::eTransferDstOptimal,
-        {region},
-        vk::Filter::eLinear);
+      region.write(cmd);
 
       width = w2;
       height = h2;
     }
 
-    vk::ImageSubresourceRange from {};
-    from
-        .setAspectMask(vk::ImageAspectFlagBits::eColor)
-        .setBaseArrayLayer(0)
-        .setLayerCount(1)
-        .setBaseMipLevel(info.mipLevels - 1)
-        .setLevelCount(1);
-      
-      vk::ImageMemoryBarrier to_src {};
-      to_src
-        .setImage(img.api_image())
-        .setOldLayout(vk::ImageLayout::eTransferDstOptimal)
-        .setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
-        .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-        .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
-        .setDstAccessMask(vk::AccessFlagBits::eTransferRead)
-        .setSubresourceRange(from);
+    ImageBarrier to_src {img.api_image(), vk::ImageAspectFlagBits::eColor};
+    to_src
+      .access_msk(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead)
+      .set_range(info.mipLevels - 1, 1)
+      .change_layout(vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal)
+      .write(cmd, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer);
+    
+  }
 
-      cmd.pipelineBarrier(
-        vk::PipelineStageFlagBits::eTransfer,
-        vk::PipelineStageFlagBits::eTransfer,
-        (vk::DependencyFlags)0,
-        {},
-        {}, {to_src});
+  ImageViewID ResourceStorage::create_cubemap_view(Context &ctx, const ImageID &img, 
+    const vk::ImageAspectFlags &flags, u32 base_mip, u32 mips, vk::ComponentMapping map) 
+  {
+    vk::ImageSubresourceRange range {};
+    range
+      .setAspectMask(flags)
+      .setBaseArrayLayer(0)
+      .setLayerCount(6)
+      .setBaseMipLevel(base_mip)
+      .setLevelCount(mips);
+
+    vk::ImageSubresourceRange r = range;
+    r.levelCount = min(img->get_info().mipLevels, r.levelCount);
+
+    vk::ImageViewCreateInfo info {};
+    info.setFormat(img->info.format);
+    info.setImage(img->handle);
+    info.setViewType(vk::ImageViewType::eCube);
+    info.setSubresourceRange(r);
+    info.setComponents(map);
+    
+    ImageView view {ctx.get_device().createImageView(info), img};
+    return views.create(view);
   }
 }

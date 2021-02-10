@@ -1,6 +1,8 @@
 #ifndef COMMON_HPP_INCLUDED
 #define COMMON_HPP_INCLUDED
 
+#define GLM_DEPTH_ZERO_TO_ONE
+
 #include <cinttypes>
 #include <vulkan/vulkan.hpp>
 #include <cassert>

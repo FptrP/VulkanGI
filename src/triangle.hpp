@@ -3,23 +3,17 @@
 
 #include "driverstate.hpp"
 #include "scene.hpp"
+#include "cubemap_shadow.hpp"
 
 #include <optional>
 #include <iostream>
-
-struct Vert {
-  Vert(f32 x, f32 y, f32 z, f32 u, f32 v) : pos {x, y, z}, uv {u, v} {}
-
-  f32 pos[3];
-  f32 uv[2];
-};
 
 struct GBufferSubpass {
   GBufferSubpass(FrameGlobal &fg) : frame_data{fg} {}
 
   void init(DriverState &ds) {
-    ds.pipelines.load_shader(ds.ctx, "triangle_vs", "src/shaders/vert.spv", vk::ShaderStageFlagBits::eVertex);
-    ds.pipelines.load_shader(ds.ctx, "triangle_fs", "src/shaders/frag.spv", vk::ShaderStageFlagBits::eFragment);
+    ds.pipelines.load_shader(ds.ctx, "triangle_vs", "src/shaders/triangle_vert.spv", vk::ShaderStageFlagBits::eVertex);
+    ds.pipelines.load_shader(ds.ctx, "triangle_fs", "src/shaders/triangle_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
     scene.load("assets/Sponza/glTF/Sponza.gltf", "assets/Sponza/glTF/");
     scene.gen_buffers(ds);
@@ -73,6 +67,7 @@ struct GBufferSubpass {
       .add_scissors(0, 0, ext.width, ext.height)
 
       .set_blend_logic_op(false)
+      .add_blend_attachment()
       .add_blend_attachment()
       .add_blend_attachment()
       .set_blend_constants(1.f, 1.f, 1.f, 1.f)
@@ -129,6 +124,16 @@ struct GBufferSubpass {
         img_bind.write(ds.ctx);
       }
     }
+
+    {
+      cubemap = ds.storage.create_cubemap(ds.ctx, 512, 512, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eTransferDst|vk::ImageUsageFlagBits::eSampled);
+      cmrender = new CubemapShadowRenderer{};
+      cmrender->init(ds);
+      cmrender->render(ds, cubemap, scene, glm::vec3{0, 4, 0});
+
+      auto cubemap_view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
+      frame_data.set_cubemap(cubemap_view);
+    }
   }
 
   void release(DriverState &ds) {
@@ -142,9 +147,13 @@ struct GBufferSubpass {
 
   void render(drv::DrawContext &draw_ctx, DriverState &ds) {
     auto frame = draw_ctx.frame_id;
-
+    
+    
     VertexUB data;
-    data.camera = frame_data.get_projection_matrix() * frame_data.get_camera_matrix();
+    data.camera = frame_data.get_camera_matrix();
+    auto camera_pos = frame_data.get_camera_pos();
+    data.project = frame_data.get_projection_matrix();
+    data.camera_origin = glm::vec4{camera_pos.x, camera_pos.y, camera_pos.z, 0.f};
 
     ds.storage.buffer_memcpy(ds.ctx, ubo[frame], 0, &data, sizeof(data));
     draw_ctx.dcb.bindPipeline(vk::PipelineBindPoint::eGraphics, ds.pipelines.get(pipeline));
@@ -169,7 +178,8 @@ struct GBufferSubpass {
   }
 
 private:
-  void create_texture_sets(DriverState &ds) {
+  void create_texture_sets(DriverState &ds);
+  /*void create_texture_sets(DriverState &ds) {
     vk::ImageSubresourceRange i_range {};
       i_range
         .setAspectMask(vk::ImageAspectFlagBits::eColor)
@@ -192,10 +202,15 @@ private:
     
     tex_layout = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
     texture_set = ds.descriptors.allocate_set(ds.ctx, tex_layout);
-  }
+  }*/
+
+  
 
   struct VertexUB {
     glm::mat4 camera;
+    glm::mat4 inv_camera;
+    glm::mat4 project;
+    glm::vec4 camera_origin;
   };
 
   drv::PipelineID pipeline;
@@ -212,6 +227,8 @@ private:
   FrameGlobal &frame_data;
 
   Scene scene;
+  CubemapShadowRenderer *cmrender = nullptr;
+  drv::ImageID cubemap;
 };
 
 #endif

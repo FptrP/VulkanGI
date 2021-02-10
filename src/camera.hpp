@@ -1,6 +1,7 @@
 #ifndef CAMERA_HPP_INCLUDED
 #define CAMERA_HPP_INCLUDED
 
+#define GLM_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <SDL2/SDL.h>
@@ -75,6 +76,8 @@ struct Camera {
 	void move(float dt) {
 	  pos += speed * dt * (move_dir.x * front + move_dir.y * up + move_dir.z * right);
 	}
+
+  glm::vec3 get_pos() const { return pos; }
 
 private:
 	glm::vec3 pos, front {0, 0, -1}, up, right, world_up;

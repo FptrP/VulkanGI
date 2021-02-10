@@ -36,61 +36,10 @@ void Renderer::release() {
 }
 
 vk::RenderPass Renderer::create_main_renderpass() {
-  /*vk::AttachmentDescription desc {};
-  
-  desc.setInitialLayout(vk::ImageLayout::eUndefined);
-  desc.setFinalLayout(vk::ImageLayout::ePresentSrcKHR);
-  desc.setFormat(ds.ctx.get_swapchain_fmt());
-  desc.setLoadOp(vk::AttachmentLoadOp::eClear);
-  desc.setStoreOp(vk::AttachmentStoreOp::eStore);
-  desc.setSamples(vk::SampleCountFlagBits::e1);
-  
-  vk::AttachmentDescription depth {};
-  depth
-    .setInitialLayout(vk::ImageLayout::eUndefined)
-    .setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-    .setFormat(vk::Format::eD24UnormS8Uint)
-    .setLoadOp(vk::AttachmentLoadOp::eClear)
-    .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare)
-    .setSamples(vk::SampleCountFlagBits::e1)
-    .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
-    .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
-
-  vk::AttachmentReference ref {};
-  ref.setAttachment(0);
-  ref.setLayout(vk::ImageLayout::eColorAttachmentOptimal);
-
-  vk::AttachmentReference depth_ref{};
-  depth_ref.setAttachment(1);
-  depth_ref.setLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
-
-  auto attachments = {desc, depth};
-  auto output = {ref};
-
-  vk::SubpassDescription subpass {};
-  subpass.setColorAttachments(output);
-  subpass.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
-  subpass.setPDepthStencilAttachment(&depth_ref);
-
-  vk::SubpassDependency dep {};
-  dep.setSrcSubpass(VK_SUBPASS_EXTERNAL);
-  dep.dstSubpass = 0;
-  dep.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests);
-  dep.setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests);
-  dep.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite|vk::AccessFlagBits::eDepthStencilAttachmentWrite);
-
-  auto dependencies = {dep};
-  vk::RenderPassCreateInfo info {};
-
-  info.setAttachments(attachments);
-  info.setSubpasses(subpass);
-  info.setDependencies(dependencies);
-  return ds.ctx.get_device().createRenderPass(info);*/
-
   vk::AttachmentDescription albedo_desc {};
   albedo_desc
     .setInitialLayout(vk::ImageLayout::eUndefined)
-    .setFinalLayout(vk::ImageLayout::eUndefined)
+    .setFinalLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
     .setFormat(vk::Format::eR8G8B8A8Srgb)
     .setLoadOp(vk::AttachmentLoadOp::eClear)
     .setStoreOp(vk::AttachmentStoreOp::eDontCare)
@@ -99,18 +48,25 @@ vk::RenderPass Renderer::create_main_renderpass() {
     .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
 
   vk::AttachmentDescription normal_desc = albedo_desc;
+  normal_desc.setFormat(vk::Format::eR16G16B16A16Sfloat);
+  
+  vk::AttachmentDescription worldpos_desc = normal_desc;
+  
   vk::AttachmentDescription depth_desc = albedo_desc;
   depth_desc.setFormat(vk::Format::eD24UnormS8Uint);
   
   vk::AttachmentDescription backbuf_desc = albedo_desc;
   backbuf_desc
+  .setFormat(ds.ctx.get_swapchain_fmt())
   .setLoadOp(vk::AttachmentLoadOp::eDontCare)
   .setStoreOp(vk::AttachmentStoreOp::eStore)
   .setFinalLayout(vk::ImageLayout::ePresentSrcKHR);
 
-  auto attachments = {albedo_desc, normal_desc, depth_desc, backbuf_desc};
+  auto attachments = {albedo_desc, normal_desc, worldpos_desc, depth_desc, backbuf_desc};
 
   vk::AttachmentReference gbuf_albedo {}, gbuf_normal {}, gbuf_depth {}, out_color {}, shading_albedo {}, shading_normal {}, shading_depth{};
+  vk::AttachmentReference gbuf_worldpos {}, shading_worldpos {};
+  
   gbuf_albedo
     .setAttachment(0)
     .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
@@ -120,7 +76,7 @@ vk::RenderPass Renderer::create_main_renderpass() {
     .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
 
   gbuf_depth
-    .setAttachment(2)
+    .setAttachment(3)
     .setLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
   
   shading_albedo
@@ -132,15 +88,23 @@ vk::RenderPass Renderer::create_main_renderpass() {
     .setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
 
   shading_depth
-    .setAttachment(2)
+    .setAttachment(3)
     .setLayout(vk::ImageLayout::eDepthStencilReadOnlyOptimal);
 
   out_color
     .setLayout(vk::ImageLayout::eColorAttachmentOptimal)
-    .setAttachment(3);
+    .setAttachment(4);
+  
+  gbuf_worldpos
+    .setAttachment(2)
+    .setLayout(vk::ImageLayout::eColorAttachmentOptimal);
 
-  auto gbuf_attachments = {gbuf_albedo, gbuf_normal};
-  auto gbuf_out = {shading_albedo, shading_normal, shading_depth};
+  shading_worldpos
+    .setAttachment(2)
+    .setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+
+  auto gbuf_attachments = {gbuf_albedo, gbuf_normal, gbuf_worldpos};
+  auto gbuf_out = {shading_albedo, shading_normal, shading_worldpos, shading_depth};
   auto out_attachments = {out_color};
 
   vk::SubpassDescription gbuf_pass {};
@@ -173,7 +137,7 @@ vk::RenderPass Renderer::create_main_renderpass() {
     .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput|vk::PipelineStageFlagBits::eEarlyFragmentTests)
     .setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader)
     .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite|vk::AccessFlagBits::eDepthStencilAttachmentWrite)
-    .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentRead|vk::AccessFlagBits::eDepthStencilAttachmentRead);
+    .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
 
   auto dep = {out_dep, gbuf_dep};
 
@@ -193,7 +157,7 @@ void Renderer::create_framebuffers(std::vector<vk::Framebuffer> &fb) {
 
   for (u32 i = 0; i < images.size(); i++) {
     
-    auto attachments = {gbuf.images[0]->api_view(), gbuf.images[1]->api_view(), gbuf.images[2]->api_view(), images[i]};
+    auto attachments = {gbuf.images[0]->api_view(), gbuf.images[1]->api_view(), gbuf.images[2]->api_view(), gbuf.images[3]->api_view(), images[i]};
     
     vk::FramebufferCreateInfo info {};
     info
@@ -230,7 +194,7 @@ void Renderer::render(drv::DrawContext &dctx) {
         
   vk::ClearValue depth_clear {};
   depth_clear.depthStencil.setDepth(1.f);
-  auto clear_vals = {color, color, depth_clear, color};
+  auto clear_vals = {color, color, color, depth_clear, color};
 
   vk::RenderPassBeginInfo info {};
   info.setRenderPass(ds.main_renderpass);

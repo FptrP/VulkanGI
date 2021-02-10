@@ -19,9 +19,7 @@ namespace drv {
     void init_backbuffer_views(Context &ctx);
     void init(Context &ctx, const std::vector<vk::Framebuffer> &fb);
 
-    const std::vector<vk::ImageView> get_backbuffer_views() const {
-      return backbuffer_images;
-    }
+    const std::vector<vk::ImageView> get_backbuffer_views() const { return backbuffer_images; }
 
 
     void init(Context &ctx, vk::RenderPass &pass);
@@ -32,6 +30,9 @@ namespace drv {
     DrawContext get_next(Context &ctx);
     void submit(Context &ctx, DrawContext &dctx);
 
+    vk::CommandBuffer start_cmd(Context &ctx);
+    vk::Fence submit_cmd(Context &ctx, vk::CommandBuffer cmd);
+    void free_cmd(Context &ctx, vk::CommandBuffer cmd);
   private:
     void create_sync_resources(Context &ctx);
     void create_depth_buffers(Context &ctx, ResourceStorage &storage);

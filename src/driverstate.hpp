@@ -9,6 +9,7 @@
 
 #include "camera.hpp"
 
+#include <glm/glm.hpp>
 #include <mutex>
 
 struct DriverState {
@@ -21,9 +22,8 @@ struct DriverState {
 };
 
 struct GBuffer {
-  vk::Framebuffer target;
   vk::Sampler sampler; 
-  std::vector<drv::ImageViewID> images; //albedo, normal, depth
+  std::vector<drv::ImageViewID> images; //albedo, normal, world_pos, depth
 
   void init(DriverState &ds) {
     auto screen = ds.ctx.get_swapchain_extent();
@@ -38,7 +38,14 @@ struct GBuffer {
       ds.ctx, 
       screen.width, 
       screen.height, 
-      vk::Format::eR8G8B8A8Srgb, 
+      vk::Format::eR16G16B16A16Sfloat, 
+      vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eColorAttachment);
+    
+    auto worldpos_img = ds.storage.create_rt(
+      ds.ctx, 
+      screen.width, 
+      screen.height, 
+      vk::Format::eR16G16B16A16Sfloat, 
       vk::ImageUsageFlagBits::eInputAttachment|vk::ImageUsageFlagBits::eColorAttachment);
     
     auto depth_img = ds.storage.create_rt(
@@ -50,22 +57,12 @@ struct GBuffer {
 
     auto albedo_view = ds.storage.create_rt_view(ds.ctx, albedo_img, vk::ImageAspectFlagBits::eColor);
     auto normal_view = ds.storage.create_rt_view(ds.ctx, normal_img, vk::ImageAspectFlagBits::eColor);
+    auto worldpos_view = ds.storage.create_rt_view(ds.ctx, worldpos_img, vk::ImageAspectFlagBits::eColor);
     auto depth_view = ds.storage.create_rt_view(ds.ctx, depth_img, vk::ImageAspectFlagBits::eDepth);
 
-    auto attachments = {albedo_view->api_view(), normal_view->api_view(), depth_view->api_view()};
-
-    vk::FramebufferCreateInfo info {};
-    info
-      .setWidth(screen.width)
-      .setHeight(screen.height)
-      .setLayers(1)
-      .setRenderPass(ds.main_renderpass)
-      .setAttachments(attachments);
-
-    target = ds.ctx.get_device().createFramebuffer(info);
-    
     images.push_back(albedo_view);
     images.push_back(normal_view);
+    images.push_back(worldpos_view);
     images.push_back(depth_view);
 
     vk::SamplerCreateInfo smp {};
@@ -80,7 +77,6 @@ struct GBuffer {
   }
 
   void release(DriverState &ds) {
-    ds.ctx.get_device().destroyFramebuffer(target);
     ds.ctx.get_device().destroySampler(sampler);
   }
 };
@@ -112,9 +108,17 @@ struct FrameGlobal {
     frame_lock.unlock();
   }
 
-  glm::mat4 get_camera_matrix() { 
-    std::lock_guard<std::mutex> lock{frame_lock};
-    return camera.get_view_mat(); 
+  glm::mat4 get_camera_matrix(bool update = true) {
+    if (update) {
+      std::lock_guard<std::mutex> lock{frame_lock};
+      camera_matrix = camera.get_view_mat();
+      camera_pos = camera.get_pos(); 
+    } 
+    return camera_matrix;
+  }
+
+  glm::vec3 get_camera_pos() const {
+    return camera_pos;
   }
 
   glm::mat4 get_projection_matrix() const {
@@ -123,12 +127,20 @@ struct FrameGlobal {
 
   GBuffer &get_gbuffer() { return gbuffer; }
   const GBuffer &get_gbuffer() const { return gbuffer; }
+  
+  void set_cubemap(const drv::ImageViewID &cm) { cubemap = cm; }
+
+  drv::ImageViewID &get_cubemap() { return cubemap; }
 
 private:
   GBuffer gbuffer;
+  drv::ImageViewID cubemap;
 
   std::mutex frame_lock;
   Camera camera;
+  
+  glm::mat4 camera_matrix;
+  glm::vec3 camera_pos;
   const glm::mat4 projection = glm::perspective(glm::radians(60.f), 4.f/3.f, 0.01f, 15.f);
 };
 

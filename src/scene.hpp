@@ -43,9 +43,9 @@ struct Scene {
 
   const std::vector<SceneObject>& get_objects() const { return objects; }
 
-  drv::BufferID &get_matrix_buff() { return matrix_buff; }
-  drv::BufferID &get_index_buff() { return index_buff; }
-  drv::BufferID &get_verts_buff() { return verts_buff; }
+  const drv::BufferID &get_matrix_buff() const { return matrix_buff; }
+  const drv::BufferID &get_index_buff() const { return index_buff; }
+  const drv::BufferID &get_verts_buff() const { return verts_buff; }
 
   const std::vector<SceneMaterial> &get_materials() const { return materials; }
 

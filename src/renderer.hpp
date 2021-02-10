@@ -7,6 +7,7 @@
 #include "driverstate.hpp"
 #include "triangle.hpp"
 #include "shading.hpp"
+#include "cubemap_shadow.hpp"
 
 enum class RenderEvents {
   None = 0,
@@ -36,6 +37,7 @@ private:
   FrameGlobal frame_data;
   GBufferSubpass *gbuffer_subpass = nullptr;
   ShadingPass *shading_subpass = nullptr;
+  CubemapShadowRenderer *renderer = nullptr;
 };
 
 #endif

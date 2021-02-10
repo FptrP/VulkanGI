@@ -19,7 +19,8 @@ namespace drv {
     Self add_sampler(u32 binding, vk::ShaderStageFlags stages);
     Self add_array_of_tex(u32 binding, u32 count, vk::ShaderStageFlags stages);
     Self add_input_attachment(u32 binding, vk::ShaderStageFlags stages);
-    
+    //Self add_cubemap_sampler(u32 binding, vk::ShaderStageFlags stages);
+
     vk::DescriptorSetLayoutCreateInfo build();
   
   private:
