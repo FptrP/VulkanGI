@@ -8,6 +8,8 @@
 #include "triangle.hpp"
 #include "shading.hpp"
 #include "cubemap_shadow.hpp"
+#include "render_oct.hpp"
+
 
 enum class RenderEvents {
   None = 0,

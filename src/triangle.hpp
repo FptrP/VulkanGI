@@ -4,6 +4,7 @@
 #include "driverstate.hpp"
 #include "scene.hpp"
 #include "cubemap_shadow.hpp"
+#include "render_oct.hpp"
 
 #include <optional>
 #include <iostream>
@@ -26,12 +27,23 @@ struct GBufferSubpass {
     cmrender = new CubemapShadowRenderer{};
     cmrender->init(ds);
     cmrender->render(ds, cubemap, scene, glm::vec3{0, 4, 0});
-
     auto cubemap_view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
+    
+
+    oct_map = ds.storage.create_rt(ds.ctx, 1024, 1024, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled);
+    auto oct_view = ds.storage.create_rt_view(ds.ctx, oct_map, vk::ImageAspectFlagBits::eColor);
+    octrender = new OctahedralRenderer {};
+    octrender->init(ds);
+    octrender->transformt_to_oct(ds, cubemap_view, frame_data.get_gbuffer().sampler, oct_view);
+    
     frame_data.set_cubemap(cubemap_view);
   }
 
   void release(DriverState &ds) {
+    delete cmrender;
+    delete octrender;
+    
+
     frame_data.get_gbuffer().release(ds);
 
     ds.ctx.get_device().destroyFramebuffer(framebuf);
@@ -79,7 +91,10 @@ private:
 
   Scene scene;
   CubemapShadowRenderer *cmrender = nullptr;
+  OctahedralRenderer *octrender = nullptr;
+
   drv::ImageID cubemap;
+  drv::ImageID oct_map;
 };
 
 #endif

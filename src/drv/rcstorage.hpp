@@ -93,6 +93,10 @@ struct RCId {
     id.storage = nullptr;
   }
 
+  bool is_nullptr() const {
+    return storage == nullptr;
+  }
+
   const RCId& operator=(const RCId<T> &id) {
     if (storage) {
       storage->dec_ref(*this);

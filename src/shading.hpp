@@ -3,6 +3,7 @@
 
 #include "driverstate.hpp"
 #include "scene.hpp"
+#include "postprocessing.hpp"
 
 #include <optional>
 #include <iostream>
@@ -48,8 +49,8 @@ struct ShadingPass {
   }
 
   void create_pipeline(DriverState &ds) {
-    ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
-    ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
+    //ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
+    //ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
     auto layouts = {ds.descriptors.get(tex_layout)};
     

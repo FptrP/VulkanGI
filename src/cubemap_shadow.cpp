@@ -81,8 +81,6 @@ void CubemapShadowRenderer::create_pipeline(DriverState &ds) {
     .add_shader("cube_shadow_fs")
     
     .add_attribute(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, pos))
-    //.add_attribute(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, norm))
-    //.add_attribute(2, 0, vk::Format::eR32G32Sfloat, offsetof(SceneVertex, uv))
     .add_binding(0, sizeof(SceneVertex), vk::VertexInputRate::eVertex)
 
     .set_vertex_assembly(vk::PrimitiveTopology::eTriangleList, false)

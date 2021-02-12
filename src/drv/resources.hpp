@@ -75,6 +75,9 @@ namespace drv {
 
     u32 img_index() const { return img.debug_index(); }
 
+    const ImageID &get_base_img() const { return img; }
+    ImageID &get_base_img() { return img; }
+    
   private:
     ImageView(const vk::ImageView &v, const ImageID &i) : view{v}, img{i} {}
 
