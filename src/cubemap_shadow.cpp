@@ -211,7 +211,7 @@ void CubemapShadowRenderer::render(DriverState &ds, drv::ImageID &cubemap, const
     cmd.bindIndexBuffer(scene.get_index_buff()->api_buffer(), 0, vk::IndexType::eUint32);
 
     const auto& objects = scene.get_objects(); 
-    auto &materials = scene.get_materials();
+    auto &materials = scene.get_material_desc();
     for (auto &obj : objects) {
       if (materials[obj.material_index].albedo_path.empty()) continue;
       u32 mat_id = obj.matrix_index;

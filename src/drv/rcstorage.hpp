@@ -86,7 +86,7 @@ template <typename T>
 struct RCId {
   RCId() {}
   RCId(const RCId &id) : storage {id.storage}, index {id.index} {
-    storage->inc_ref(id);
+    if (storage) storage->inc_ref(id);
   }
 
   RCId(RCId &&id) : storage {id.storage}, index {id.index} {

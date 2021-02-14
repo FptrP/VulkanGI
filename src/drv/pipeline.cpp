@@ -7,7 +7,7 @@ namespace drv {
   
   bool PipelineManager::load_shader(Context &ctx, const std::string &name, const std::string &path, vk::ShaderStageFlagBits stages, const std::string &proc) {
     if (shaders.find(name) != shaders.end()) {
-      throw std::runtime_error {" shader redefenition"};
+      return false;
     }
   
     ShaderDesc desc;

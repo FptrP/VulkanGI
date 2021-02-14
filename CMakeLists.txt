@@ -31,6 +31,7 @@ set(SOURCES
   src/scene.cpp
   src/gbufferpass.cpp
   src/cubemap_shadow.cpp
+  src/light_field_probes.cpp
   src/drv/context.cpp
   src/drv/draw_context.cpp
   src/drv/pipeline.cpp

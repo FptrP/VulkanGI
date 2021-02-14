@@ -4,6 +4,8 @@
 #include <cassert>
 #include <iostream>
 
+#include "cubemap_shadow.hpp"
+
 void Scene::load(const std::string &path, const std::string &folder) {
   Assimp::Importer importer {};
   auto aiscene = importer.ReadFile(path, aiProcess_GenSmoothNormals|aiProcess_Triangulate| aiProcess_SortByPType | aiProcess_FlipUVs);
@@ -70,7 +72,7 @@ void Scene::process_materials(const aiScene *scene) {
   for (u32 i = 0; i < scene->mNumMaterials; i++) {
     const auto &scene_mt = scene->mMaterials[i];
     u32 count = scene_mt->GetTextureCount(aiTextureType_DIFFUSE);
-    SceneMaterial mat {};
+    SceneMaterialDesc mat {};
 
     if (count) {
       aiString path;
@@ -150,4 +152,42 @@ void Scene::gen_buffers(DriverState &ds) {
   std::cout << verts_size << " VB bytes\n";
   std::cout << indexes.size() * sizeof(u32) << " IB bytes\n";
   std::cout << matrices.size() * sizeof(glm::mat4) << " MB bytes\n";
+}
+
+void Scene::gen_shadows(DriverState &ds) {
+  CubemapShadowRenderer renderer {};
+  renderer.init(ds);
+  const auto flags = vk::ImageUsageFlagBits::eTransferDst|vk::ImageUsageFlagBits::eSampled;
+  for (u32 i = 0; i < scene_lights.size(); i++) {
+    auto cubemap = ds.storage.create_cubemap(ds.ctx, 256, 256, vk::Format::eR32Sfloat, flags);
+    renderer.render(ds, cubemap, *this, scene_lights[i].position);
+    auto view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
+    scene_lights[i].shadow = view;
+  }
+  renderer.release(ds);
+}
+
+
+void Scene::gen_textures(DriverState &ds) {
+  const u32 mat_count = materials.size();
+  tex_materials.reserve(mat_count);
+
+  vk::ImageSubresourceRange i_range {};
+  i_range
+    .setAspectMask(vk::ImageAspectFlagBits::eColor)
+    .setBaseArrayLayer(0)
+    .setBaseMipLevel(0)
+    .setLayerCount(1)
+    .setLevelCount(~0u);
+  
+  for (u32 i = 0; i < mat_count; i++) {
+    SceneMaterial mat {};
+    const auto &desc = materials[i];
+    if (!desc.albedo_path.empty()) {
+      auto img = ds.storage.load_image2D(ds.ctx, desc.albedo_path.c_str());
+      auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
+      mat.albedo_tex = view;
+    }
+    tex_materials.push_back(mat);
+  }
 }

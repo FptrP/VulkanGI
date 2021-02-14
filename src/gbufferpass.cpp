@@ -1,7 +1,7 @@
 #include "triangle.hpp"
 
 void GBufferSubpass::create_texture_sets(DriverState &ds) {
-  vk::ImageSubresourceRange i_range {};
+  /*vk::ImageSubresourceRange i_range {};
   i_range
     .setAspectMask(vk::ImageAspectFlagBits::eColor)
     .setBaseArrayLayer(0)
@@ -9,20 +9,34 @@ void GBufferSubpass::create_texture_sets(DriverState &ds) {
     .setLayerCount(1)
     .setLevelCount(~0u);
     
-  for (auto &mat : scene.get_materials()) {
+  for (auto &mat : frame_data.get_scene().get_material_desc()) {
     if (mat.albedo_path.empty()) continue;
     auto img = ds.storage.load_image2D(ds.ctx, mat.albedo_path.c_str());
     auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
     images.push_back(view);
+  }*/
+
+  std::vector<vk::ImageView> api_views;
+  for (auto &mat : frame_data.get_scene().get_materials()) {
+    if (mat.albedo_tex.is_nullptr()) continue;
+
+    api_views.push_back(mat.albedo_tex->api_view());
   }
 
   drv::DescriptorSetLayoutBuilder builder {};
   builder
     .add_sampler(0, vk::ShaderStageFlagBits::eFragment)
-    .add_array_of_tex(1, images.size(), vk::ShaderStageFlagBits::eFragment);
+    .add_array_of_tex(1, api_views.size(), vk::ShaderStageFlagBits::eFragment);
     
   tex_layout = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
   texture_set = ds.descriptors.allocate_set(ds.ctx, tex_layout);
+
+  drv::DescriptorBinder img_bind {ds.descriptors.get(texture_set)};
+  img_bind
+    .bind_sampler(0, sampler)
+    .bind_array_of_img(1, api_views.size(), api_views.data());
+      
+  img_bind.write(ds.ctx);   
 }
 
 void GBufferSubpass::create_renderpass(DriverState &ds) {
@@ -161,6 +175,14 @@ void GBufferSubpass::create_pipeline(DriverState &ds) {
 }
 
 void GBufferSubpass::create_pipeline_layout(DriverState &ds) {
+  vk::SamplerCreateInfo samp_i {};
+  samp_i.setMinFilter(vk::Filter::eLinear);
+  samp_i.setMagFilter(vk::Filter::eLinear);
+  samp_i.setMipmapMode(vk::SamplerMipmapMode::eLinear);
+  samp_i.setMinLod(0.f);
+  samp_i.setMaxLod(10.f);
+  sampler = ds.ctx.get_device().createSampler(samp_i);
+
   create_texture_sets(ds);
 
   drv::DescriptorSetLayoutBuilder builder {};
@@ -188,44 +210,14 @@ void GBufferSubpass::create_pipeline_layout(DriverState &ds) {
 
   pipeline_layout = ds.ctx.get_device().createPipelineLayout(info);
 
-  vk::SamplerCreateInfo samp_i {};
-  samp_i.setMinFilter(vk::Filter::eLinear);
-  samp_i.setMagFilter(vk::Filter::eLinear);
-  samp_i.setMipmapMode(vk::SamplerMipmapMode::eLinear);
-  samp_i.setMinLod(0.f);
-  samp_i.setMaxLod(10.f);
-  sampler = ds.ctx.get_device().createSampler(samp_i);
-
-      
-  vk::ImageSubresourceRange i_range {};
-  i_range
-    .setAspectMask(vk::ImageAspectFlagBits::eColor)
-    .setBaseArrayLayer(0)
-    .setBaseMipLevel(0)
-    .setLayerCount(1)
-    .setLevelCount(1);
-
-
   for (u32 i = 0; i < drv::MAX_FRAMES_IN_FLIGHT; i++) {
     ubo[i] = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(VertexUB), vk::BufferUsageFlagBits::eUniformBuffer);
     drv::DescriptorBinder bind {ds.descriptors.get(sets[i])};
     bind
       .bind_ubo(0, *ubo[i])
-      .bind_storage_buff(1, scene.get_matrix_buff()->api_buffer());    
+      .bind_storage_buff(1, frame_data.get_scene().get_matrix_buff()->api_buffer());    
     bind.write(ds.ctx);
-  }
-
-  std::vector<vk::ImageView> api_views;
-  for (auto &id : images) {
-    api_views.push_back(id->api_view());
-  }
-
-  drv::DescriptorBinder img_bind {ds.descriptors.get(texture_set)};
-  img_bind
-    .bind_sampler(0, sampler)
-    .bind_array_of_img(1, images.size(), api_views.data());
-      
-  img_bind.write(ds.ctx);      
+  }   
 }
 
 void GBufferSubpass::render(drv::DrawContext &draw_ctx, DriverState &ds) {
@@ -266,17 +258,17 @@ void GBufferSubpass::render(drv::DrawContext &draw_ctx, DriverState &ds) {
   ds.storage.buffer_memcpy(ds.ctx, ubo[frame], 0, &data, sizeof(data));
   draw_ctx.dcb.bindPipeline(vk::PipelineBindPoint::eGraphics, ds.pipelines.get(pipeline));
     
-  auto buffers = { scene.get_verts_buff()->api_buffer() };
+  auto buffers = { frame_data.get_scene().get_verts_buff()->api_buffer() };
   auto offsets = {0ul};
     
   draw_ctx.dcb.bindVertexBuffers(0, buffers, offsets);
-  draw_ctx.dcb.bindIndexBuffer(scene.get_index_buff()->api_buffer(), 0, vk::IndexType::eUint32);
+  draw_ctx.dcb.bindIndexBuffer(frame_data.get_scene().get_index_buff()->api_buffer(), 0, vk::IndexType::eUint32);
 
   auto bind_sets = { ds.descriptors.get(sets[frame]), ds.descriptors.get(texture_set) };
   draw_ctx.dcb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, bind_sets, {});
 
-  const auto& objects = scene.get_objects(); 
-  auto &materials = scene.get_materials();
+  const auto& objects = frame_data.get_scene().get_objects(); 
+  auto &materials = frame_data.get_scene().get_material_desc();
   for (auto &obj : objects) {
     if (materials[obj.material_index].albedo_path.empty()) continue;
     u32 indexes[2] {obj.matrix_index, obj.material_index};

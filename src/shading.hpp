@@ -42,7 +42,7 @@ struct ShadingPass {
       .bind_combined_img(1, gbuff.images[1]->api_view(), gbuff.sampler)
       .bind_combined_img(2, gbuff.images[2]->api_view(), gbuff.sampler)
       .bind_combined_img(3, gbuff.images[3]->api_view(), gbuff.sampler)
-      .bind_combined_img(4, frame_data.get_cubemap()->api_view(), gbuff.sampler);
+      .bind_combined_img(4, frame_data.get_scene().get_lights().at(0).shadow->api_view(), gbuff.sampler);
       
     binder.write(ds.ctx);
     sets.push_back(tex_set);

@@ -7,12 +7,12 @@ void Renderer::init(SDL_Window *w) {
   ds.storage.init(ds.ctx);
 
   ds.main_renderpass = create_main_renderpass();
-  frame_data.init(ds);
-
   ds.submit_pool.init(ds.ctx, ds.main_renderpass);
   
   ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
   ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
+
+  frame_data.init(ds);
 
   gbuffer_subpass = new GBufferSubpass{frame_data};
   gbuffer_subpass->init(ds);

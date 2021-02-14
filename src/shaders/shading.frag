@@ -1,6 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+#include "include/oct_coord.glsl"
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
@@ -10,13 +11,14 @@ layout (set = 0, binding = 1) uniform sampler2D normal_tex;
 layout (set = 0, binding = 2) uniform sampler2D worldpos_tex;
 layout (set = 0, binding = 3) uniform sampler2D depth_tex;
 
-layout(set = 0, binding = 4) uniform samplerCube shadow;
+layout(set = 0, binding = 4) uniform samplerCube shadow_cube;
 
 layout (push_constant) uniform PushData {
   vec3 camera_origin;
 } pc;
 
 float pcf_cubemap(in samplerCube shadow_tex, vec3 dir, float dist);
+float pcf_octmap(in sampler2D shadow_tex, vec3 dir, float dist);
 
 void main() {
   vec3 world_pos = texture(worldpos_tex, uv).xyz + pc.camera_origin;
@@ -29,7 +31,7 @@ void main() {
 
   float s = max(dot(dir, norm), 0);
 
-  s *= pcf_cubemap(shadow, -dir, dist);
+  s *= pcf_cubemap(shadow_cube, -dir, dist);
 
   float atten = 1.f;
   outColor = atten * s * texture(albedo_tex, uv);
@@ -50,5 +52,23 @@ float pcf_cubemap(in samplerCube shadow_tex, vec3 dir, float dist) {
     }
   }
   
+  return s/(samples * samples * samples);
+}
+
+float pcf_octmap(in sampler2D shadow_tex, vec3 dir, float dist) {
+  const float bias = 0.05; 
+  const float samples = 4.0;
+  const float offset  = 0.01;
+
+  float s = 0.f;
+
+  for(float x = -offset; x < offset; x += offset / (samples * 0.5)) {
+    for(float y = -offset; y < offset; y += offset / (samples * 0.5)) {
+      for(float z = -offset; z < offset; z += offset / (samples * 0.5)) {
+        float light_dist = texture(shadow_tex, sphere_to_oct(dir + vec3(x, y, z))).r; 
+        s += (light_dist < dist - bias)? 0.f : 1.f;
+      }
+    }
+  }
   return s/(samples * samples * samples);
 }

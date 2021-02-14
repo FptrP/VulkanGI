@@ -1,7 +1,7 @@
 #ifndef TRIANGLE_HPP_INCLUDED
 #define TRIANGLE_HPP_INCLUDED
 
-#include "driverstate.hpp"
+#include "frame_global.hpp"
 #include "scene.hpp"
 #include "cubemap_shadow.hpp"
 #include "render_oct.hpp"
@@ -13,37 +13,14 @@ struct GBufferSubpass {
   GBufferSubpass(FrameGlobal &fg) : frame_data{fg} {}
 
   void init(DriverState &ds) {
-    scene.load("assets/Sponza/glTF/Sponza.gltf", "assets/Sponza/glTF/");
-    scene.gen_buffers(ds);
-
     create_renderpass(ds);
     frame_data.get_gbuffer().init(ds, gbuf_renderpass);
     create_framebuffer(ds);
     create_pipeline_layout(ds);
     create_pipeline(ds);
-
-
-    cubemap = ds.storage.create_cubemap(ds.ctx, 512, 512, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eTransferDst|vk::ImageUsageFlagBits::eSampled);
-    cmrender = new CubemapShadowRenderer{};
-    cmrender->init(ds);
-    cmrender->render(ds, cubemap, scene, glm::vec3{0, 4, 0});
-    auto cubemap_view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
-    
-
-    oct_map = ds.storage.create_rt(ds.ctx, 1024, 1024, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled);
-    auto oct_view = ds.storage.create_rt_view(ds.ctx, oct_map, vk::ImageAspectFlagBits::eColor);
-    octrender = new OctahedralRenderer {};
-    octrender->init(ds);
-    octrender->transformt_to_oct(ds, cubemap_view, frame_data.get_gbuffer().sampler, oct_view);
-    
-    frame_data.set_cubemap(cubemap_view);
   }
 
   void release(DriverState &ds) {
-    delete cmrender;
-    delete octrender;
-    
-
     frame_data.get_gbuffer().release(ds);
 
     ds.ctx.get_device().destroyFramebuffer(framebuf);
@@ -79,8 +56,6 @@ private:
   std::vector<drv::DescriptorSetID> sets;
   drv::DescriptorSetID texture_set; 
 
-  std::vector<drv::ImageViewID> images;
-
   drv::BufferID ubo[drv::MAX_FRAMES_IN_FLIGHT];
   vk::Sampler sampler;
 
@@ -88,13 +63,6 @@ private:
 
   vk::RenderPass gbuf_renderpass;
   vk::Framebuffer framebuf;
-
-  Scene scene;
-  CubemapShadowRenderer *cmrender = nullptr;
-  OctahedralRenderer *octrender = nullptr;
-
-  drv::ImageID cubemap;
-  drv::ImageID oct_map;
 };
 
 #endif
