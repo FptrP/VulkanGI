@@ -177,15 +177,15 @@ uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray
 
     for (float s = 0; s < steps; s++) {
       vec2 uv = start_oct + s * duv;
-      float dist = texture(sampler2D(probe_dist[probe_id], probe_sampler), uv).r;
-      vec3 r = start + s * dray;
+      vec3 r = start + s * dray; //Problem - uv != projected r. 
+      float dist = texture(sampler2D(probe_dist[probe_id], probe_sampler), sphere_to_oct(r)).r;
       float ray_dist = length(r);
 
       if (ray_dist > dist + 0.5) {
         return RAY_UNKNOWN;
       }
 
-      if (ray_dist >= dist - 0.04) {
+      if (ray_dist >= dist - 0.01) {
         out_ray  = r + probe_pos;
         return RAY_HIT;
       }
