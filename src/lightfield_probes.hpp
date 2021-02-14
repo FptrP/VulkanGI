@@ -15,6 +15,12 @@ struct LightField {
   void release(DriverState &ds);
   void render(DriverState &ds, Scene &scene, glm::vec3 center, glm::vec3 step, glm::uvec3 d);
   
+  glm::uvec3 get_dimensions() const { return dim; }
+  glm::vec3 get_bbox_min() const { return probes[0].pos; }
+  glm::vec3 get_bbox_max() const { return probes[dim.x * dim.y * dim.z - 1].pos; }
+
+  std::vector<LightFieldProbe> get_probes() { return probes; }
+
 private:
   void create_renderpass(DriverState &ds);
   void create_framebuffer(DriverState &ds);

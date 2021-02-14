@@ -1,9 +1,10 @@
 #include "lightfield_probes.hpp"
 #include "drv/cmd_utils.hpp"
+#include <iostream>
 
-const u32 CUBEMAP_RES = 128;
+const u32 CUBEMAP_RES = 512;
 const vk::Extent2D CUBEMAP_EXT {CUBEMAP_RES, CUBEMAP_RES};
-const u32 OCT_RES = 256;
+const u32 OCT_RES = 1024;
 
 void LightField::calc_matrix(u32 side, vk::Extent2D ext, glm::vec3 pos, glm::mat4 &out) {
   float aspect = float(ext.width)/float(ext.height);
@@ -301,6 +302,7 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 center, glm::ve
     for (u32 y = 0; y < d.y; y++) {
       for (u32 z = 0; z < d.z; z++) {
         glm::vec3 pos = origin + glm::vec3{step.x * x, step.y * y, step.z * z};
+        std::cout << pos.x << " " << pos.y << " " << pos.z << "\n";
         render_cubemaps(ds, scene, pos);
         
         LightFieldProbe probe;

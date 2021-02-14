@@ -8,6 +8,7 @@
 #include <optional>
 #include <iostream>
 
+const u32 MAX_PROBES = 9;
 
 struct ShadingPass {
 
@@ -20,6 +21,7 @@ struct ShadingPass {
 
   void release(DriverState &ds) {
     ds.descriptors.free_layout(ds.ctx, tex_layout);
+    ds.descriptors.free_layout(ds.ctx, light_field_layout);
   }
 
   void create_shader_desc(DriverState &ds, FrameGlobal &frame) {
@@ -46,13 +48,46 @@ struct ShadingPass {
       
     binder.write(ds.ctx);
     sets.push_back(tex_set);
+
+    drv::DescriptorSetLayoutBuilder lf {};
+    lf
+      .add_ubo(0, vk::ShaderStageFlagBits::eFragment)
+      .add_sampler(1, vk::ShaderStageFlagBits::eFragment)
+      .add_array_of_tex(2, MAX_PROBES, vk::ShaderStageFlagBits::eFragment);
+    
+    light_field_layout = ds.descriptors.create_layout(ds.ctx, lf.build(), 1);
+    auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
+
+    ubo = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(LightFieldData), vk::BufferUsageFlagBits::eUniformBuffer);
+
+    vk::ImageView views[MAX_PROBES];
+    LightFieldData data;
+    data.bmax = glm::vec4{frame_data.get_light_field().get_bbox_max(), 0.f};
+    data.bmin = glm::vec4{frame_data.get_light_field().get_bbox_min(), 0.f};
+    data.dim = glm::vec4{ frame_data.get_light_field().get_dimensions(), 0.f};
+
+    for (u32 i = 0; i < MAX_PROBES; i++) {
+      views[i] = frame_data.get_light_field().get_probes()[i].dist->api_view();
+      data.positions[i] = glm::vec4{frame_data.get_light_field().get_probes()[i].pos, 0.f};
+    }
+
+    ds.storage.buffer_memcpy(ds.ctx, ubo, 0, &data, sizeof(data));
+
+    drv::DescriptorBinder lf_binder { ds.descriptors.get(lf_set) };
+    lf_binder
+      .bind_ubo(0, ubo->api_buffer())
+      .bind_sampler(1, frame_data.get_gbuffer().sampler)
+      .bind_array_of_img(2, MAX_PROBES, views)
+      .write(ds.ctx);
+
+    sets.push_back(lf_set);
   }
 
   void create_pipeline(DriverState &ds) {
     //ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
     //ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
-    auto layouts = {ds.descriptors.get(tex_layout)};
+    auto layouts = {ds.descriptors.get(tex_layout), ds.descriptors.get(light_field_layout)};
     
     vk::PushConstantRange push {};
     push
@@ -101,7 +136,7 @@ struct ShadingPass {
     auto pos = frame_data.get_camera_pos();
 
     draw_ctx.dcb.bindPipeline(vk::PipelineBindPoint::eGraphics, ds.pipelines.get(pipeline));
-    auto desc_sets = {ds.descriptors.get(sets[0])}; 
+    auto desc_sets = {ds.descriptors.get(sets[0]), ds.descriptors.get(sets[1])}; 
     draw_ctx.dcb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, desc_sets, {});
     draw_ctx.dcb.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(glm::vec3), &pos);
     draw_ctx.dcb.draw(3, 1, 0, 0);
@@ -109,10 +144,18 @@ struct ShadingPass {
 
 private:
   drv::PipelineID pipeline;
-  drv::DesciptorSetLayoutID tex_layout;
+  drv::DesciptorSetLayoutID tex_layout, light_field_layout;
   vk::PipelineLayout pipeline_layout;
   std::vector<drv::DescriptorSetID> sets;
 
+  struct LightFieldData {
+    glm::vec4 dim;
+    glm::vec4 bmin;
+    glm::vec4 bmax;
+    glm::vec4 positions[MAX_PROBES];
+  };
+
+  drv::BufferID ubo;
   //drv::BufferID ubo[drv::MAX_FRAMES_IN_FLIGHT];
   FrameGlobal &frame_data;
 };

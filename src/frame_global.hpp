@@ -6,6 +6,8 @@
 #include "scene.hpp"
 #include "lightfield_probes.hpp"
 
+#include <iostream>
+
 struct FrameGlobal {
   void init(DriverState &ds) {
     scene.load("assets/Sponza/glTF/Sponza.gltf", "assets/Sponza/glTF/");
@@ -17,7 +19,9 @@ struct FrameGlobal {
     scene.gen_textures(ds);
 
     light_field.init(ds);
-    light_field.render(ds, scene, glm::vec3{0.f, 5.f, 0.f}, glm::vec3{2.f, 2.f, 2.f}, glm::uvec3{3, 3, 3});
+    auto c = glm::vec3{-0.657369, 5.83935, -0.129316};
+    auto c2 = glm::vec3{-1.5f, 1.5f, 0.f};
+    light_field.render(ds, scene, c, glm::vec3{0.5f, 0.5f, 0.5f}, glm::uvec3{3, 3, 3});
   }
 
   void release(DriverState &ds) {
@@ -32,6 +36,11 @@ struct FrameGlobal {
   void handle_events(const SDL_Event &event) {
     std::lock_guard<std::mutex> lock{frame_lock};
     camera.process_event(event);
+
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
+      auto pos = camera.get_pos();
+      std::cout << pos.x << " " << pos.y << " " << pos.z << "\n";
+    }
   }
 
   void lock() {
@@ -63,6 +72,8 @@ struct FrameGlobal {
   const GBuffer &get_gbuffer() const { return gbuffer; }
   
   Scene &get_scene() { return scene; }
+
+  LightField &get_light_field() { return light_field; }
 
 private:
   Scene scene;
