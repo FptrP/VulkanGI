@@ -53,7 +53,7 @@ struct PostProcessingPass {
 
       ubo[i].release();
     }
-
+    ds.pipelines.free_pipeline(ds.ctx, pipeline);
     ds.ctx.get_device().destroyRenderPass(renderpass);
   }
 

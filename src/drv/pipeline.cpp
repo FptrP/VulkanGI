@@ -92,8 +92,20 @@ namespace drv {
   }
 
   PipelineID PipelineManager::create_pipeline(Context &ctx, const PipelineDescBuilder &info) {
-    pipelines.push_back(info.desc);
-    u32 index = pipelines.size() - 1;
+    u32 index = pipelines.size();
+    bool push = true;
+    if (free_index.size()) {
+      index = free_index[free_index.size() - 1];
+      free_index.pop_back();
+      push = false;
+    }
+
+    if (push) {
+      pipelines.push_back(info.desc);
+    } else {
+      pipelines[index] = info.desc;
+    }
+    
     auto &desc = pipelines[index];
     desc.handle = create_pipeline(ctx, desc);
     return index;
@@ -105,19 +117,32 @@ namespace drv {
     }
 
     for (auto &d : pipelines) {
-      ctx.get_device().destroyPipeline(d.handle);
+      if (d.handle) ctx.get_device().destroyPipeline(d.handle);
+      if (d.layout) ctx.get_device().destroyPipelineLayout(d.layout);
     }
   }
 
   void PipelineManager::reload_shaders(Context &ctx) {
-    release(ctx);
     
     for (auto &desc : shaders) {
       desc.second.mod = load_shader(ctx, desc.second.path);
     }
 
     for (auto &p : pipelines) {
-      p.handle = create_pipeline(ctx, p);
+      if (p.handle && p.layout) {
+        ctx.get_device().destroyPipeline(p.handle);
+        p.handle = create_pipeline(ctx, p);
+      }
     }
+  }
+
+  void PipelineManager::free_pipeline(Context &ctx, PipelineID id) {
+    ctx.get_device().destroyPipeline(pipelines[id].handle);
+    ctx.get_device().destroyPipelineLayout(pipelines[id].layout);
+
+    pipelines[id].handle = nullptr;
+    pipelines[id].layout = nullptr;
+
+    free_index.push_back(id);
   }
 }

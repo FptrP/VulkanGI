@@ -8,7 +8,7 @@
 #include <optional>
 #include <iostream>
 
-const u32 MAX_PROBES = 9;
+const u32 MAX_PROBES = 27;
 
 struct ShadingPass {
 
@@ -22,6 +22,7 @@ struct ShadingPass {
   void release(DriverState &ds) {
     ds.descriptors.free_layout(ds.ctx, tex_layout);
     ds.descriptors.free_layout(ds.ctx, light_field_layout);
+    ds.pipelines.free_pipeline(ds.ctx, pipeline);
   }
 
   void create_shader_desc(DriverState &ds, FrameGlobal &frame) {

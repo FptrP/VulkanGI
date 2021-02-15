@@ -109,7 +109,8 @@ void CubemapShadowRenderer::create_pipeline(DriverState &ds) {
 }
 
 void CubemapShadowRenderer::release(DriverState &ds) {
-  ds.ctx.get_device().destroyPipelineLayout(pipeline_layout);
+  ds.pipelines.free_pipeline(ds.ctx, pipeline);
+  //ds.ctx.get_device().destroyPipelineLayout(pipeline_layout);
 }
 
 void CubemapShadowRenderer::set_shader_input(DriverState &ds, const Scene &scene) {

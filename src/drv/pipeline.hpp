@@ -42,14 +42,19 @@ namespace drv {
     void reload_shaders(Context &ctx);
 
     PipelineID create_pipeline(Context &ctx, const PipelineDescBuilder &info);
+    void free_pipeline(Context &ctx, PipelineID id);
 
     vk::Pipeline &get(PipelineID id) { return pipelines[id].handle; }
+    vk::PipelineLayout &get_layout(PipelineID id) { return pipelines[id].layout; }
+
     const vk::Pipeline &get(PipelineID id) const { return pipelines[id].handle; }
+    const vk::PipelineLayout &get_layout(PipelineID id) const { return pipelines[id].layout; }
 
     void release(Context &ctx);
 
   private:
     struct PipelineDesc;
+
     vk::ShaderModule load_shader(Context &ctx, const std::string &path);
     vk::Pipeline create_pipeline(Context &ctx, PipelineDesc &desc);
 
@@ -125,7 +130,7 @@ namespace drv {
 
     std::map<std::string, ShaderDesc> shaders;
     std::vector<PipelineDesc> pipelines;
-
+    std::vector<u32> free_index;
     friend PipelineDescBuilder;
   };
 

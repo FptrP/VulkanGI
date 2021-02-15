@@ -22,7 +22,7 @@ struct GBufferSubpass {
 
   void release(DriverState &ds) {
     frame_data.get_gbuffer().release(ds);
-
+    ds.pipelines.free_pipeline(ds.ctx, pipeline);
     ds.ctx.get_device().destroyFramebuffer(framebuf);
     ds.ctx.get_device().destroyRenderPass(gbuf_renderpass);
     ds.descriptors.free_layout(ds.ctx, desc_layout);

@@ -199,7 +199,8 @@ void LightField::init(DriverState &ds) {
 void LightField::release(DriverState &ds) {
   lightprobe_pass.release(ds);
   ds.ctx.get_device().destroySampler(sampler);
-  ds.ctx.get_device().destroyPipelineLayout(pipeline_layout);
+  ds.pipelines.free_pipeline(ds.ctx, pipeline);
+  //ds.ctx.get_device().destroyPipelineLayout(pipeline_layout);
   ds.ctx.get_device().destroyFramebuffer(fb);
   ds.ctx.get_device().destroyRenderPass(renderpass);
 }

@@ -341,4 +341,55 @@ namespace drv {
     ImageView view {ctx.get_device().createImageView(info), img};
     return views.create(view);
   }
+
+  ImageID ResourceStorage::create_image2D_array(Context &ctx, 
+    u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers) 
+  {
+    Image img;
+    img.info.format = fmt;
+    img.info.imageType = vk::ImageType::e2D;
+    img.info.initialLayout = vk::ImageLayout::eUndefined;
+    img.info.extent = vk::Extent3D {width, height, 1};
+    img.info.mipLevels = 1;
+    img.info.arrayLayers = layers;
+    img.info
+      .setQueueFamilyIndexCount(ctx.queue_family_count())
+      .setPQueueFamilyIndices(ctx.get_queue_indexes())
+      .setSamples(vk::SampleCountFlagBits::e1)
+      .setTiling(vk::ImageTiling::eOptimal)
+      .setFlags(vk::ImageCreateFlagBits::e2DArrayCompatible)
+      .setUsage(usage);
+    
+    
+    img.handle = ctx.get_device().createImage(img.info);
+    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
+    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
+    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
+
+    img.layout = vk::ImageLayout::eUndefined;
+    img.mem_type = GPUMemoryT::Local;
+  
+    return images.create(img);
+  }
+
+  ImageViewID ResourceStorage::create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags) {
+    vk::ImageSubresourceRange range {};
+    range
+      .setAspectMask(flags)
+      .setBaseArrayLayer(0)
+      .setLayerCount(img->info.arrayLayers)
+      .setBaseMipLevel(0)
+      .setLevelCount(1);
+    
+    vk::ImageViewCreateInfo info {};
+    info.setFormat(img->info.format);
+    info.setImage(img->handle);
+    info.setViewType(vk::ImageViewType::eCube);
+    info.setSubresourceRange(range);
+    info.setComponents(vk::ComponentMapping{});
+    
+    ImageView view {ctx.get_device().createImageView(info), img};
+    return views.create(view);
+  }
 }
+
