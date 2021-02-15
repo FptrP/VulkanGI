@@ -190,8 +190,6 @@ void LightField::init(DriverState &ds) {
 
   lightprobe_pass
     .init_attachment(vk::Format::eR32Sfloat)
-    .init_attachment(vk::Format::eR16G16B16A16Sfloat)
-    .init_attachment(vk::Format::eR16G16B16A16Sfloat)
     .init(ds, 3, "cube_probe_to_oct_fs");
   
 }
@@ -291,6 +289,11 @@ void LightField::bind_resources(DriverState &ds, Scene &scene) {
 }
 
 void LightField::render(DriverState &ds, Scene &scene, glm::vec3 center, glm::vec3 step, glm::uvec3 d) {
+  auto ARR_USG = vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled;
+  auto layers = d.x * d.y * d.z;
+  auto dist_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR32Sfloat, ARR_USG, layers);
+  dist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor);
+
   dim = d;
   
   bind_resources(ds, scene);
@@ -308,19 +311,12 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 center, glm::ve
         
         LightFieldProbe probe;
         probe.pos = pos;
-        const auto USG = vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled;
-        auto pdist = ds.storage.create_rt(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR32Sfloat, USG);
-        auto pcolor = ds.storage.create_rt(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, USG);
-        auto pnrom = ds.storage.create_rt(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, USG);
 
-        probe.color = ds.storage.create_rt_view(ds.ctx, pcolor, vk::ImageAspectFlagBits::eColor);
-        probe.dist = ds.storage.create_rt_view(ds.ctx, pdist, vk::ImageAspectFlagBits::eColor);
-        probe.norm = ds.storage.create_rt_view(ds.ctx, pnrom, vk::ImageAspectFlagBits::eColor);
+        u32 index = probes.size();
+        auto layer_view = ds.storage.create_2Dlayer_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor, index);
 
         lightprobe_pass.set_render_area(OCT_RES, OCT_RES);
-        lightprobe_pass.set_attachment(0, probe.dist);
-        lightprobe_pass.set_attachment(1, probe.color);
-        lightprobe_pass.set_attachment(2, probe.norm);
+        lightprobe_pass.set_attachment(0, layer_view);
         lightprobe_pass.set_image_sampler(0, cm_dist, sampler);
         lightprobe_pass.set_image_sampler(1, cm_color, sampler);
         lightprobe_pass.set_image_sampler(2, cm_norm, sampler);

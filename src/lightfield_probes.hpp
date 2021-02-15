@@ -7,7 +7,6 @@
 
 struct LightFieldProbe {
   glm::vec3 pos;
-  drv::ImageViewID dist, color, norm; 
 };
 
 struct LightField {
@@ -20,6 +19,7 @@ struct LightField {
   glm::vec3 get_bbox_max() const { return probes[dim.x * dim.y * dim.z - 1].pos; }
 
   std::vector<LightFieldProbe> get_probes() { return probes; }
+  drv::ImageViewID &get_distance_array() { return dist_array; }
 
 private:
   void create_renderpass(DriverState &ds);
@@ -59,6 +59,7 @@ private:
   
 
   glm::uvec3 dim;
+  drv::ImageViewID dist_array;
   std::vector<LightFieldProbe> probes;
 };
 

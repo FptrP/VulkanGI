@@ -53,22 +53,19 @@ struct ShadingPass {
     drv::DescriptorSetLayoutBuilder lf {};
     lf
       .add_ubo(0, vk::ShaderStageFlagBits::eFragment)
-      .add_sampler(1, vk::ShaderStageFlagBits::eFragment)
-      .add_array_of_tex(2, MAX_PROBES, vk::ShaderStageFlagBits::eFragment);
+      .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment);
     
     light_field_layout = ds.descriptors.create_layout(ds.ctx, lf.build(), 1);
     auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
 
     ubo = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(LightFieldData), vk::BufferUsageFlagBits::eUniformBuffer);
 
-    vk::ImageView views[MAX_PROBES];
     LightFieldData data;
     data.bmax = glm::vec4{frame_data.get_light_field().get_bbox_max(), 0.f};
     data.bmin = glm::vec4{frame_data.get_light_field().get_bbox_min(), 0.f};
     data.dim = glm::vec4{ frame_data.get_light_field().get_dimensions(), 0.f};
 
     for (u32 i = 0; i < MAX_PROBES; i++) {
-      views[i] = frame_data.get_light_field().get_probes()[i].dist->api_view();
       data.positions[i] = glm::vec4{frame_data.get_light_field().get_probes()[i].pos, 0.f};
     }
 
@@ -77,8 +74,7 @@ struct ShadingPass {
     drv::DescriptorBinder lf_binder { ds.descriptors.get(lf_set) };
     lf_binder
       .bind_ubo(0, ubo->api_buffer())
-      .bind_sampler(1, frame_data.get_gbuffer().sampler)
-      .bind_array_of_img(2, MAX_PROBES, views)
+      .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), gbuff.sampler)
       .write(ds.ctx);
 
     sets.push_back(lf_set);

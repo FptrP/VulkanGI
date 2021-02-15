@@ -20,15 +20,14 @@ layout(set = 0, binding = 4) uniform samplerCube shadow_cube;
 #define RAY_HIT 1
 #define RAY_UNKNOWN 2
 
-layout(set = 1, binding = 1) uniform sampler probe_sampler;
-layout(set = 1, binding = 2) uniform texture2D probe_dist[MAX_PROBES];
-
 layout(set = 1, binding = 0) uniform LightFieldData {
   vec4 dim;
   vec4 bmin;
   vec4 bmax;
   vec4 positions[MAX_PROBES];
 } lightfield;
+
+layout(set = 1, binding = 1) uniform sampler2DArray probe_dist; 
 
 layout (push_constant) uniform PushData {
   vec3 camera_origin;
@@ -213,7 +212,7 @@ uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray
     for (float s = 0; s < steps; s++) {
       vec2 uv = start_oct + s * duv;
       vec3 r = start + s * dray; //Problem - uv != projected r. 
-      float dist = texelFetch(sampler2D(probe_dist[probe_id], probe_sampler), ivec2(uv * tex_size), 0).r;
+      float dist = texelFetch(probe_dist, ivec3(uv * tex_size, probe_id), 0).r;
       vec3 oct_to_point = normalize(oct_to_sphere(uv));
       float ray_dist = ray_intersection_dist(start, end-start, oct_to_point);
 
@@ -235,25 +234,7 @@ uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray
 }
 
 uint trace_ray_simple(uint probe, vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray) {
-  const float steps = 100000.f;
-  float dt = (max_t - min_t)/steps;
-  vec3 probe_pos = lightfield.positions[probe].xyz;
-
-  for (float s = 0.f; s < steps; s += 1.f) {
-    vec3 pos = origin + (min_t + s * dt) * dir - probe_pos;
-    float probe_dist = texture(sampler2D(probe_dist[probe], probe_sampler), sphere_to_oct(pos)).r;
-    float ray_dist = length(pos);
-
-    if (ray_dist > probe_dist + 0.05) {
-      out_ray = pos + probe_pos;
-      return RAY_UNKNOWN;
-    }
-
-    if (ray_dist > probe_dist) {
-      out_ray = pos + probe_pos;
-      return RAY_HIT;
-    }
-  } 
+  
   return RAY_MISS;
 }
 

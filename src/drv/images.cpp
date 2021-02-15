@@ -357,7 +357,7 @@ namespace drv {
       .setPQueueFamilyIndices(ctx.get_queue_indexes())
       .setSamples(vk::SampleCountFlagBits::e1)
       .setTiling(vk::ImageTiling::eOptimal)
-      .setFlags(vk::ImageCreateFlagBits::e2DArrayCompatible)
+      //.setFlags(vk::ImageCreateFlagBits::e2DArrayCompatible)
       .setUsage(usage);
     
     
@@ -384,7 +384,27 @@ namespace drv {
     vk::ImageViewCreateInfo info {};
     info.setFormat(img->info.format);
     info.setImage(img->handle);
-    info.setViewType(vk::ImageViewType::eCube);
+    info.setViewType(vk::ImageViewType::e2DArray);
+    info.setSubresourceRange(range);
+    info.setComponents(vk::ComponentMapping{});
+    
+    ImageView view {ctx.get_device().createImageView(info), img};
+    return views.create(view);
+  }
+
+  ImageViewID ResourceStorage::create_2Dlayer_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, u32 layer) {
+    vk::ImageSubresourceRange range {};
+    range
+      .setAspectMask(flags)
+      .setBaseArrayLayer(layer)
+      .setLayerCount(1)
+      .setBaseMipLevel(0)
+      .setLevelCount(1);
+    
+    vk::ImageViewCreateInfo info {};
+    info.setFormat(img->info.format);
+    info.setImage(img->handle);
+    info.setViewType(vk::ImageViewType::e2D);
     info.setSubresourceRange(range);
     info.setComponents(vk::ComponentMapping{});
     

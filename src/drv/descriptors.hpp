@@ -67,7 +67,7 @@ namespace drv {
     DescriptorBinder &bind_sampler(u32 slot, const vk::Sampler &smp);
     DescriptorBinder &bind_array_of_img(u32 slot, u32 count, const vk::ImageView *views, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
     DescriptorBinder &bind_input_attachment(u32 slot, const vk::ImageView &view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
-
+    
     void write(Context &ctx);
   private:
     vk::DescriptorSet dst;
