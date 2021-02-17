@@ -19,6 +19,7 @@ layout(set = 0, binding = 4) uniform samplerCube shadow_cube;
 #define RAY_MISS 0
 #define RAY_HIT 1
 #define RAY_UNKNOWN 2
+#define RAY_TRACE_ERR 3
 
 layout(set = 1, binding = 0) uniform LightFieldData {
   vec4 dim;
@@ -36,10 +37,14 @@ layout (push_constant) uniform PushData {
 float pcf_cubemap(in samplerCube shadow_tex, vec3 dir, float dist);
 float pcf_octmap(in sampler2D shadow_tex, vec3 dir, float dist);
 
-uint closest_probe(vec3 point);
-uint closest_probe_slow(vec3 point);
+
+uint probe_to_index(uvec3 probe);
+uint next_probe(uvec3 probe, uint offs);
+uvec3 closest_probe(vec3 point);
+
+//uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray);
+uint trace_probe(uint probe_id, vec3 start, vec3 end, out vec3 out_r);
 uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray);
-uint trace_ray_simple(uint probe, vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray);
 
 bool draw_probes(vec3 camera, vec3 world_pos);
 
@@ -49,7 +54,7 @@ void main() {
   
   vec3 light_pos = vec3(0, 4, 0);
   vec3 L = light_pos - world_pos;
-
+  
   vec3 ray_hit;
   float s = 1.f;
   vec3 start = world_pos + 0.01 * norm;
@@ -128,31 +133,25 @@ float pcf_octmap(in sampler2D shadow_tex, vec3 dir, float dist) {
   return s/(samples * samples * samples);
 }
 
-uint closest_probe(vec3 point) {
-  vec3 center = 0.5f * (lightfield.bmin.xyz + lightfield.bmax.xyz);
-  vec3 field_size = (lightfield.bmax.xyz - lightfield.bmin.xyz);
-  uvec3 cell = uvec3(floor(clamp(point - center, vec3(0, 0, 0), field_size)/lightfield.dim.xyz));
+uint probe_to_index(uvec3 probe) {
   uvec3 udim = uvec3(lightfield.dim.xyz);
+  return clamp(probe.z + probe.y * udim.z + probe.x * udim.y * udim.z, 0, udim.x * udim.y * udim.z - 1);
+}
 
+uint next_probe(uvec3 probe, uint offs) {
+  uvec3 d = uvec3(offs & 1, (offs >> 1) & 1, (offs >> 2) & 1);
+  return probe_to_index(probe + d);
+}
 
-  uint min_index = cell.x * udim.x + cell.y * udim.y + cell.z * udim.z;
-  float min_dist = length(point - lightfield.positions[min_index].xyz);
-
-  for (uint x = 0; x < 1; x++) {
-    for (uint y = 0; y < 1; y++) {
-      for (uint z = 0; z < 1; z++) {
-        uvec3 p = cell + uvec3(x, y, z);
-        uint index = p.x * udim.x + p.y * udim.y + p.z * udim.z;
-        float dist = length(point - lightfield.positions[index].xyz);
-        if (dist < min_dist) {
-          min_dist = dist;
-          min_index = index;
-        }
-      }
-    }
-  }
-
-  return min_index;
+uvec3 closest_probe(vec3 point) {
+  point = clamp(point, lightfield.bmin.xyz, lightfield.bmax.xyz);
+  vec3 bbox_size = (lightfield.bmax.xyz - lightfield.bmin.xyz);
+  vec3 cell_size = bbox_size/lightfield.dim.xyz;  
+  uvec3 udim = uvec3(lightfield.dim.xyz);
+  
+  uvec3 cell = uvec3(floor((point - lightfield.bmin.xyz)/cell_size));
+  
+  return clamp(cell, uvec3(0, 0, 0), uvec3(udim.x - 1, udim.y - 1, udim.z - 1));
 }
 
 void min_swap(inout float a, inout float b) {
@@ -160,6 +159,117 @@ void min_swap(inout float a, inout float b) {
   b = max(a, b);
   a = temp;
 }
+
+#define TRACE_ERR(x) if (isnan((x)) || isinf((x))) {return RAY_TRACE_ERR;}
+
+uint trace_segment(uint probe_id, vec3 start, vec3 end, out vec3 out_r) {
+  const float TEX_SIZE = 1024;
+
+  vec2 uv_start = sphere_to_oct(start);
+  vec2 uv_end = sphere_to_oct(end);
+
+  vec2 pixel_delta = abs((uv_end - uv_start) * TEX_SIZE);
+  float steps = 30.f;
+
+  if (steps < 1.f) {
+    return RAY_MISS;
+  }
+
+  vec3 dray = (end - start);
+  
+  for (float s = 0; s < steps; s += 1.f) {
+    vec3 r = start + s * dray;
+    vec2 uv = sphere_to_oct(r);
+
+    float geom_dist = texelFetch(probe_dist, ivec3(uv * TEX_SIZE, probe_id), 0).r;
+    float ray_dist = length(r);
+
+    if (ray_dist > geom_dist + 0.15) {
+      out_r = r;
+      return RAY_UNKNOWN;
+    }
+
+    if (ray_dist > geom_dist) {
+      out_r = geom_dist * oct_to_sphere(uv);
+      return RAY_HIT;
+    }
+  }
+
+  return RAY_MISS;
+}
+
+uint trace_probe(uint probe_id, vec3 start, vec3 end, out vec3 out_r) {
+  vec3 probe_pos = lightfield.positions[probe_id].xyz;
+  start -= probe_pos;
+  end -= probe_pos;
+
+  vec3 ray_delta = end - start;
+  vec3 borders = -start/ray_delta;
+
+  min_swap(borders.x, borders.y);
+  min_swap(borders.y, borders.z);
+  min_swap(borders.x, borders.y);
+
+  float segments[5];
+  segments[0] = 0.01;
+  segments[1] = clamp(borders.x, 0, 1);
+  segments[2] = clamp(borders.y, 0, 1);
+  segments[3] = clamp(borders.z, 0, 1);
+  segments[4] = 1;
+  
+  vec3 r;
+
+  for (uint i = 1; i < 5; i++) {
+    vec3 seg_start = start + ray_delta * segments[i-1];
+    vec3 seg_end = start + ray_delta * segments[i];
+    uint res = trace_segment(probe_id, seg_start, seg_end, r);
+
+    if (res == RAY_HIT || res == RAY_UNKNOWN || res == RAY_TRACE_ERR) {
+      out_r = r + probe_pos;
+      return res;
+    }
+  }
+
+  return RAY_MISS;
+} 
+/*
+uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray) {
+  float dir_len = length(dir);
+
+  dir = normalize(dir);
+  min_t *= dir_len;
+  max_t *= dir_len;
+
+  uvec3 probe_pos = closest_probe(origin);
+  float t;
+  uint res;
+
+  for (uint probe_offs = 0; probe_offs < 1; probe_offs++) {
+    uint probe_id = next_probe(probe_pos, probe_offs);
+    res = trace_probe(probe_id, origin, dir, min_t, max_t, t);
+
+    if (res == RAY_HIT) {
+      out_ray = origin + t * dir;
+      return RAY_HIT;
+    }
+
+    if (res == RAY_MISS) {
+      return RAY_MISS;
+    }
+
+    if (res == RAY_TRACE_ERR) {
+      return res;
+    }
+    //RAY_UNCKOWN
+    min_t = t;
+    if (min_t > max_t) {
+      return RAY_UNKNOWN;
+    }
+  }
+
+  return res;
+}*/
+
 
 float ray_intersection_dist(vec3 origin, vec3 ray_dir, vec3 v) {
   float numer;
@@ -175,9 +285,22 @@ float ray_intersection_dist(vec3 origin, vec3 ray_dir, vec3 v) {
   return numer / denom;
 }
 
+uint closest_probe_slow(vec3 point) {
+  uint min_ix = 0;
+  float min_dist = length(point - lightfield.positions[min_ix].xyz);
+  for (uint i = 1; i < MAX_PROBES; i++) {
+    float dist = length(point - lightfield.positions[i].xyz);
+    if (dist < min_dist) {
+      min_dist = dist;
+      min_ix = i;
+    }
+  }
+  return min_ix;
+}
+
 uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray) {
   vec3 start = origin + dir * min_t;
-  uint probe_id = closest_probe_slow(origin);
+  uint probe_id = probe_to_index(closest_probe(origin));
 
   vec3 probe_pos = lightfield.positions[probe_id].xyz;
   start = start - probe_pos;
@@ -204,17 +327,20 @@ uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray
     vec2 end_oct = sphere_to_oct(end);
     
     vec2 pixel_dist = abs(end_oct - start_oct) * tex_size;
-    float steps = 2 * max(pixel_dist.x, pixel_dist.y);
+    float steps = max(pixel_dist.x, pixel_dist.y);
   
     vec2 duv = (end_oct - start_oct)/steps;
     vec3 dray = (end - start)/steps;
 
     for (float s = 0; s < steps; s++) {
-      vec2 uv = start_oct + s * duv;
       vec3 r = start + s * dray; //Problem - uv != projected r. 
-      float dist = texelFetch(probe_dist, ivec3(uv * tex_size, probe_id), 0).r;
+      vec2 uv = start_oct + s * duv;
       vec3 oct_to_point = normalize(oct_to_sphere(uv));
-      float ray_dist = ray_intersection_dist(start, end-start, oct_to_point);
+      float dist = texelFetch(probe_dist, ivec3(uv * tex_size, probe_id), 0).r;
+      
+      float ray_dist = length(r);//dot(r, oct_to_point);
+
+      //vec3 r = ray_dist * oct_to_point;
 
       if (ray_dist > dist + 0.5) {
         out_ray  = oct_to_point * ray_dist + probe_pos;
@@ -231,24 +357,6 @@ uint trace_ray(vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray
   }
 
   return RAY_MISS;
-}
-
-uint trace_ray_simple(uint probe, vec3 origin, vec3 dir, float min_t, float max_t, out vec3 out_ray) {
-  
-  return RAY_MISS;
-}
-
-uint closest_probe_slow(vec3 point) {
-  uint min_ix = 0;
-  float min_dist = length(point - lightfield.positions[min_ix].xyz);
-  for (uint i = 1; i < MAX_PROBES; i++) {
-    float dist = length(point - lightfield.positions[i].xyz);
-    if (dist < min_dist) {
-      min_dist = dist;
-      min_ix = i;
-    }
-  }
-  return min_ix;
 }
 
 bool draw_probes(vec3 camera, vec3 world_pos) {

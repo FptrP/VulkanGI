@@ -16,7 +16,7 @@ vec3 oct_to_sphere(vec2 uv) {
     v.xy = (1.0 - abs(v.yx)) * sign_nz(v.xy);
   }
 
-  return v;
+  return normalize(v);
 }
 
 vec2 sphere_to_oct(in vec3 v) {

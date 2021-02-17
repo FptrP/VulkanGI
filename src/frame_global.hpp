@@ -19,9 +19,7 @@ struct FrameGlobal {
     scene.gen_textures(ds);
 
     light_field.init(ds);
-    auto c = glm::vec3{1.20257, 1.8, -0.65761};
-    auto c2 = glm::vec3{-0.561324, 1.51882, -0.0};
-    light_field.render(ds, scene, c2, glm::vec3{0.5f, 0.5f, 1.f}, glm::uvec3{1, 3, 9});
+    light_field.render(ds, scene, glm::vec3{-2.27381, 0.295498, -1.23232}, glm::vec3{2.16548, 4.50458, 0.63653}, glm::uvec3{3, 3, 3});
   }
 
   void release(DriverState &ds) {

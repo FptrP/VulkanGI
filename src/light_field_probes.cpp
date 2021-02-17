@@ -288,24 +288,25 @@ void LightField::bind_resources(DriverState &ds, Scene &scene) {
   bind.write(ds.ctx);
 }
 
-void LightField::render(DriverState &ds, Scene &scene, glm::vec3 center, glm::vec3 step, glm::uvec3 d) {
+void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3 bmax, glm::uvec3 d) {
   auto ARR_USG = vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled;
   auto layers = d.x * d.y * d.z;
   auto dist_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR32Sfloat, ARR_USG, layers);
   dist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor);
 
   dim = d;
-  
+  this->bmax = bmax;
+  this->bmin = bmin;
   bind_resources(ds, scene);
   probes.reserve(d.x * d.y * d.z);
 
-  glm::vec3 size {d.x * step.x, d.y * step.y, d.z * step.z};
-  glm::vec3 origin = center - 0.5f * size;
+  glm::vec3 cell_size = (bmax - bmin)/glm::vec3{d};
+  glm::vec3 cell_offset = 0.5f * cell_size;
 
   for (u32 x = 0; x < d.x; x++) {
     for (u32 y = 0; y < d.y; y++) {
       for (u32 z = 0; z < d.z; z++) {
-        glm::vec3 pos = origin + glm::vec3{step.x * x, step.y * y, step.z * z};
+        glm::vec3 pos = bmin + glm::vec3{cell_size.x * x, cell_size.y * y, cell_size.z * z} + cell_offset;
         std::cout << pos.x << " " << pos.y << " " << pos.z << "\n";
         render_cubemaps(ds, scene, pos);
         

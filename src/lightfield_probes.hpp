@@ -12,11 +12,11 @@ struct LightFieldProbe {
 struct LightField {
   void init(DriverState &ds);
   void release(DriverState &ds);
-  void render(DriverState &ds, Scene &scene, glm::vec3 center, glm::vec3 step, glm::uvec3 d);
+  void render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3 bmax, glm::uvec3 d);
   
   glm::uvec3 get_dimensions() const { return dim; }
-  glm::vec3 get_bbox_min() const { return probes[0].pos; }
-  glm::vec3 get_bbox_max() const { return probes[dim.x * dim.y * dim.z - 1].pos; }
+  glm::vec3 get_bbox_min() const { return bmin; }
+  glm::vec3 get_bbox_max() const { return bmax; }
 
   std::vector<LightFieldProbe> get_probes() { return probes; }
   drv::ImageViewID &get_distance_array() { return dist_array; }
@@ -59,6 +59,7 @@ private:
   
 
   glm::uvec3 dim;
+  glm::vec3 bmin, bmax;
   drv::ImageViewID dist_array;
   std::vector<LightFieldProbe> probes;
 };
