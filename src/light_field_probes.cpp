@@ -151,6 +151,7 @@ void LightField::create_pipeline(DriverState &ds) {
     .add_shader("cube_probe_fs")
     
     .add_attribute(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, pos))
+    .add_attribute(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, norm))
     .add_binding(0, sizeof(SceneVertex), vk::VertexInputRate::eVertex)
 
     .set_vertex_assembly(vk::PrimitiveTopology::eTriangleList, false)
@@ -189,7 +190,8 @@ void LightField::init(DriverState &ds) {
   ds.pipelines.load_shader(ds.ctx, "cube_probe_to_oct_fs", "src/shaders/cube_probe_to_oct_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
   lightprobe_pass
-    .init_attachment(vk::Format::eR32Sfloat)
+    .init_attachment(vk::Format::eR32Sfloat) //distance
+    .init_attachment(vk::Format::eR16G16B16A16Sfloat) //normal
     .init(ds, 3, "cube_probe_to_oct_fs");
   
 }
@@ -294,6 +296,9 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
   auto dist_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR32Sfloat, ARR_USG, layers);
   dist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor);
 
+  auto norm_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, ARR_USG, layers);
+  norm_array = ds.storage.create_2Darray_view(ds.ctx, norm_img, vk::ImageAspectFlagBits::eColor);
+
   dim = d;
   this->bmax = bmax;
   this->bmin = bmin;
@@ -315,9 +320,11 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
 
         u32 index = probes.size();
         auto layer_view = ds.storage.create_2Dlayer_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor, index);
+        auto norm_view = ds.storage.create_2Dlayer_view(ds.ctx, norm_img, vk::ImageAspectFlagBits::eColor, index);
 
         lightprobe_pass.set_render_area(OCT_RES, OCT_RES);
         lightprobe_pass.set_attachment(0, layer_view);
+        lightprobe_pass.set_attachment(1, norm_view);
         lightprobe_pass.set_image_sampler(0, cm_dist, sampler);
         lightprobe_pass.set_image_sampler(1, cm_color, sampler);
         lightprobe_pass.set_image_sampler(2, cm_norm, sampler);

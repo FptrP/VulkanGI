@@ -7,8 +7,9 @@
 
 #include <optional>
 #include <iostream>
+#include <algorithm>
 
-const u32 MAX_PROBES = 27;
+const u32 MAX_PROBES = 256;
 
 struct ShadingPass {
 
@@ -53,7 +54,8 @@ struct ShadingPass {
     drv::DescriptorSetLayoutBuilder lf {};
     lf
       .add_ubo(0, vk::ShaderStageFlagBits::eFragment)
-      .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment);
+      .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(2, vk::ShaderStageFlagBits::eFragment);
     
     light_field_layout = ds.descriptors.create_layout(ds.ctx, lf.build(), 1);
     auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
@@ -64,8 +66,12 @@ struct ShadingPass {
     data.bmax = glm::vec4{frame_data.get_light_field().get_bbox_max(), 0.f};
     data.bmin = glm::vec4{frame_data.get_light_field().get_bbox_min(), 0.f};
     data.dim = glm::vec4{ frame_data.get_light_field().get_dimensions(), 0.f};
+    
+    u32 probes = std::min((u32)frame_data.get_light_field().get_probes().size(), MAX_PROBES);
+    
+    data.dim.w = probes;
 
-    for (u32 i = 0; i < MAX_PROBES; i++) {
+    for (u32 i = 0; i < probes; i++) {
       data.positions[i] = glm::vec4{frame_data.get_light_field().get_probes()[i].pos, 0.f};
     }
 
@@ -75,6 +81,7 @@ struct ShadingPass {
     lf_binder
       .bind_ubo(0, ubo->api_buffer())
       .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), gbuff.sampler)
+      .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), gbuff.sampler)
       .write(ds.ctx);
 
     sets.push_back(lf_set);

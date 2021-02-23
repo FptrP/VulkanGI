@@ -1,8 +1,10 @@
 #version 450
 
 layout (location = 0) in vec3 in_pos;
+layout (location = 1) in vec3 in_norm;
 
 layout (location = 0) out vec3 world_view;
+layout (location = 1) out vec3 world_normal;
 
 layout (set = 0, binding = 0) uniform VertexData {
   mat4 camera_proj;
@@ -20,5 +22,6 @@ layout (push_constant) uniform PushData {
 void main() {
   vec4 w = matrices[mat_id] * vec4(in_pos, 1.0);
   world_view = camera_origin.xyz - w.xyz;
+  world_normal = in_norm;
   gl_Position = camera_proj * w; 
 }
