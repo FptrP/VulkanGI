@@ -52,7 +52,7 @@ void main() {
   vec3 world_pos = texture(worldpos_tex, uv).xyz + pc.camera_origin;
   vec3 norm = texture(normal_tex, uv).xyz;
   
-  vec3 light_pos = vec3(0.367169, 2.82238, 0.0854376);
+  vec3 light_pos = vec3(-0.338895, 1.20854, -0.0975772);
   vec3 L = light_pos - world_pos;
   
   vec3 ray_hit;
@@ -142,7 +142,7 @@ uvec3 closest_probe(vec3 point) {
   vec3 cell_size = bbox_size/lightfield.dim.xyz;  
   uvec3 udim = uvec3(lightfield.dim.xyz);
   
-  uvec3 cell = uvec3(floor((point - lightfield.bmin.xyz)/cell_size));
+  uvec3 cell = uvec3(floor((point - lightfield.bmin.xyz - 0.5 * cell_size)/cell_size));
   cell = clamp(cell, uvec3(0, 0, 0), uvec3(udim.x - 1, udim.y - 1, udim.z - 1));
   return cell; 
 }
