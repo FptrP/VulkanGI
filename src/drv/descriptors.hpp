@@ -10,7 +10,7 @@
 namespace drv {
   struct DescriptorStorage;
 
-  struct DesciptorSetLayoutID {
+  struct DescriptorSetLayoutID {
   private:
     u32 index;
     friend DescriptorStorage;
@@ -19,13 +19,13 @@ namespace drv {
   struct DescriptorSetID;
 
   struct DescriptorStorage {
-    DesciptorSetLayoutID create_layout(Context &ctx, const vk::DescriptorSetLayoutCreateInfo &info, u32 max_sets);
-    void free_layout(Context &ctx, DesciptorSetLayoutID id);
+    DescriptorSetLayoutID create_layout(Context &ctx, const vk::DescriptorSetLayoutCreateInfo &info, u32 max_sets);
+    void free_layout(Context &ctx, DescriptorSetLayoutID id);
 
-    DescriptorSetID allocate_set(Context &ctx, DesciptorSetLayoutID layout);
+    DescriptorSetID allocate_set(Context &ctx, DescriptorSetLayoutID layout);
     void free_set(Context &ctx, DescriptorSetID id);
 
-    const vk::DescriptorSetLayout& get(DesciptorSetLayoutID id);
+    const vk::DescriptorSetLayout& get(DescriptorSetLayoutID id);
     const vk::DescriptorSet& get(DescriptorSetID id);
 
   private:
@@ -50,8 +50,6 @@ namespace drv {
   struct DescriptorSetID {
     DescriptorSetID() {}
   private:
-    
-    
     u32 pool_index;
     u32 desc_index;
 
@@ -67,7 +65,8 @@ namespace drv {
     DescriptorBinder &bind_sampler(u32 slot, const vk::Sampler &smp);
     DescriptorBinder &bind_array_of_img(u32 slot, u32 count, const vk::ImageView *views, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
     DescriptorBinder &bind_input_attachment(u32 slot, const vk::ImageView &view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
-    
+    DescriptorBinder &bind_storage_image(u32 slot, const vk::ImageView &view, vk::ImageLayout layout = vk::ImageLayout::eGeneral);
+
     void write(Context &ctx);
   private:
     vk::DescriptorSet dst;

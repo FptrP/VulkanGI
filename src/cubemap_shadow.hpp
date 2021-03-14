@@ -32,7 +32,7 @@ private:
   vk::RenderPass renderpass;
 
   drv::PipelineID pipeline;
-  drv::DesciptorSetLayoutID shader_input;
+  drv::DescriptorSetLayoutID shader_input;
   drv::DescriptorSetID shader_res;
   vk::PipelineLayout pipeline_layout;
 

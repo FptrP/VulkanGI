@@ -194,6 +194,7 @@ void LightField::init(DriverState &ds) {
     .init_attachment(vk::Format::eR16G16B16A16Sfloat) //normal
     .init(ds, 3, "cube_probe_to_oct_fs");
   
+  init_compute_resources(ds);
 }
 
 void LightField::release(DriverState &ds) {
@@ -307,7 +308,10 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
 
   glm::vec3 cell_size = (bmax - bmin)/glm::vec3{d};
   glm::vec3 cell_offset = 0.5f * cell_size;
-
+  
+  probe_start = bmin + cell_offset; 
+  probe_step = cell_size;
+  
   for (u32 x = 0; x < d.x; x++) {
     for (u32 y = 0; y < d.y; y++) {
       for (u32 z = 0; z < d.z; z++) {
@@ -333,6 +337,8 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
       }
     }
   }
+
+  downsample_distances(ds);
 }
 
 void LightField::transform_cubemap_layout(vk::CommandBuffer &buf, vk::ImageLayout src, vk::ImageLayout dst) {
@@ -388,4 +394,66 @@ void LightField::blit_cubemaps(vk::CommandBuffer &buf, u32 side) {
       .dst_offset(vk::Offset3D{0, 0, 0}, vk::Offset3D{(i32)CUBEMAP_RES, (i32)CUBEMAP_RES, 1})
       .write(buf);
   }
+}
+
+void LightField::init_compute_resources(DriverState &ds) {
+  ds.pipelines.load_shader(ds.ctx, "oct_fold_cs", "src/shaders/oct_fold_comp.spv", vk::ShaderStageFlagBits::eCompute);
+  
+  drv::DescriptorSetLayoutBuilder layout_builder {};
+  layout_builder
+    .add_combined_sampler(0, vk::ShaderStageFlagBits::eCompute)
+    .add_storage_image(1, vk::ShaderStageFlagBits::eCompute);
+
+  low_res_desc_layout = ds.descriptors.create_layout(ds.ctx, layout_builder.build(), 1);
+
+  auto layouts = {ds.descriptors.get(low_res_desc_layout)};
+
+  vk::PipelineLayoutCreateInfo layout_info {};
+  layout_info.setSetLayouts(layouts);
+
+  low_res_pipeline_layout = ds.ctx.get_device().createPipelineLayout(layout_info);
+  low_res_pipeline = ds.pipelines.create_compute_pipeline(ds.ctx, "oct_fold_cs", low_res_pipeline_layout);
+
+  low_res_bindings = ds.descriptors.allocate_set(ds.ctx, low_res_desc_layout);
+}
+
+void LightField::downsample_distances(DriverState &ds) {
+  auto layers = dim.x * dim.y * dim.z;
+
+  auto low_res_img = ds.storage.create_image2D_array(ds.ctx, 64, 64, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled, layers);
+  low_res_array = ds.storage.create_2Darray_view(ds.ctx, low_res_img, vk::ImageAspectFlagBits::eColor);
+
+  drv::DescriptorBinder binder {ds.descriptors.get(low_res_bindings)};
+  binder
+    .bind_combined_img(0, dist_array->api_view(), sampler)
+    .bind_storage_image(1, low_res_array->api_view())
+    .write(ds.ctx);
+
+
+  auto cmd = ds.submit_pool.start_cmd(ds.ctx);
+  vk::CommandBufferBeginInfo begin_info {};
+  cmd.begin(begin_info);
+  
+  drv::ImageBarrier to_general{low_res_img, vk::ImageAspectFlagBits::eColor};
+
+  to_general.set_range(0, 1, 0, layers);
+  to_general.change_layout(vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+  to_general.access_msk(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite);
+  to_general.write(cmd, vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eComputeShader);
+
+  cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ds.pipelines.get(low_res_pipeline));
+  cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, ds.pipelines.get_layout(low_res_pipeline), 0, {ds.descriptors.get(low_res_bindings)}, {});
+  cmd.dispatch(4, 4, layers);
+
+  drv::ImageBarrier to_sampled{low_res_img, vk::ImageAspectFlagBits::eColor};
+  to_sampled.set_range(0, 1, 0, layers);
+  to_sampled.change_layout(vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal);
+  to_sampled.access_msk(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
+  to_sampled.write(cmd, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eBottomOfPipe);
+
+
+  cmd.end();
+  auto fence = ds.submit_pool.submit_cmd(ds.ctx, cmd);
+  ds.ctx.get_device().waitForFences({fence}, VK_TRUE, ~(0ul));
+  ds.ctx.get_device().destroyFence(fence);
 }

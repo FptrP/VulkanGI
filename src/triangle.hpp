@@ -50,7 +50,7 @@ private:
   };
 
   drv::PipelineID pipeline;
-  drv::DesciptorSetLayoutID desc_layout, tex_layout;
+  drv::DescriptorSetLayoutID desc_layout, tex_layout;
   vk::PipelineLayout pipeline_layout;
 
   std::vector<drv::DescriptorSetID> sets;

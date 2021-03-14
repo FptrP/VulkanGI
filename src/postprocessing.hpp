@@ -347,7 +347,7 @@ private:
   }
 
   drv::PipelineID pipeline;
-  drv::DesciptorSetLayoutID res_layout;
+  drv::DescriptorSetLayoutID res_layout;
   vk::PipelineLayout pipeline_layout;
 
   drv::DescriptorSetID sets[CONTEXTS_COUNT];

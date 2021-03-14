@@ -2,7 +2,7 @@
 #include <iostream>
 namespace drv {
 
-  DesciptorSetLayoutID DescriptorStorage::create_layout(Context &ctx, const vk::DescriptorSetLayoutCreateInfo &info, u32 max_sets) {
+  DescriptorSetLayoutID DescriptorStorage::create_layout(Context &ctx, const vk::DescriptorSetLayoutCreateInfo &info, u32 max_sets) {
     u32 alloc_index;
     if (free_pools.size()) {
       alloc_index = free_pools.front();
@@ -48,19 +48,19 @@ namespace drv {
     pools[alloc_index].layout = layout;
     pools[alloc_index].max_descriptors = max_sets;
 
-    DesciptorSetLayoutID id;
+    DescriptorSetLayoutID id;
     id.index = alloc_index;
     return id;
   }
 
-  void DescriptorStorage::free_layout(Context &ctx, DesciptorSetLayoutID id) {
+  void DescriptorStorage::free_layout(Context &ctx, DescriptorSetLayoutID id) {
     auto cell = pools.at(id.index);
     ctx.get_device().destroyDescriptorPool(cell.desc_pool);
     ctx.get_device().destroyDescriptorSetLayout(cell.layout);
     free_pools.push_front(id.index); 
   }
 
-  DescriptorSetID DescriptorStorage::allocate_set(Context &ctx, DesciptorSetLayoutID layout) {
+  DescriptorSetID DescriptorStorage::allocate_set(Context &ctx, DescriptorSetLayoutID layout) {
     auto &cell = pools.at(layout.index);
     if (cell.allocated >= cell.max_descriptors) {
       throw std::runtime_error {"Descriptor pool overflow"};
@@ -102,7 +102,7 @@ namespace drv {
     cell.free_indexes.push_front(id.desc_index);
   }
 
-  const vk::DescriptorSetLayout& DescriptorStorage::get(DesciptorSetLayoutID id) {
+  const vk::DescriptorSetLayout& DescriptorStorage::get(DescriptorSetLayoutID id) {
     return pools.at(id.index).layout;
   }
 
@@ -226,6 +226,26 @@ namespace drv {
       .setDstSet(dst)
       .setDstBinding(slot)
       .setDescriptorType(vk::DescriptorType::eInputAttachment)
+      .setDescriptorCount(1)
+      .setPImageInfo(images[images.size() - 1].get());
+    
+    writes.push_back(write);
+    return *this;
+  }
+
+  DescriptorBinder &DescriptorBinder::bind_storage_image(u32 slot, const vk::ImageView &view, vk::ImageLayout layout) {
+    vk::DescriptorImageInfo info {};
+    info
+      .setImageView(view)
+      .setImageLayout(layout);
+
+    images.push_back(std::unique_ptr<vk::DescriptorImageInfo>{new vk::DescriptorImageInfo{info}});
+    
+    vk::WriteDescriptorSet write {};
+    write
+      .setDstSet(dst)
+      .setDstBinding(slot)
+      .setDescriptorType(vk::DescriptorType::eStorageImage)
       .setDescriptorCount(1)
       .setPImageInfo(images[images.size() - 1].get());
     

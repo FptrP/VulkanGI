@@ -134,6 +134,13 @@ namespace drv {
         p.handle = create_pipeline(ctx, p);
       }
     }
+
+    for (auto &p : compute_pipelines) {
+      if (p.handle && p.layout) {
+        ctx.get_device().destroyPipeline(p.handle);
+        p.handle = create_pipeline(ctx, p.module, p.layout);
+      }
+    }
   }
 
   void PipelineManager::free_pipeline(Context &ctx, PipelineID id) {
@@ -144,5 +151,56 @@ namespace drv {
     pipelines[id].layout = nullptr;
 
     free_index.push_back(id);
+  }
+
+  vk::Pipeline PipelineManager::create_pipeline(Context &ctx, const std::string &shader_name, vk::PipelineLayout layout) {
+    auto &shader = shaders.at(shader_name);
+
+    vk::PipelineShaderStageCreateInfo stage {};
+    stage.setStage(shader.stages);
+    stage.setModule(shader.mod);
+    stage.setPName(shader.proc.c_str());
+
+    vk::ComputePipelineCreateInfo info {};
+    info.setStage(stage);
+    info.setLayout(layout);
+    
+    return ctx.get_device().createComputePipeline(nullptr, info);
+  }
+
+  ComputePipelineID PipelineManager::create_compute_pipeline(Context &ctx, const std::string &shader_name, vk::PipelineLayout layout) {
+    ComputePipeline pipe {};
+    pipe.module = shader_name;
+    pipe.layout = layout;
+    
+    pipe.handle = create_pipeline(ctx, shader_name, layout);
+
+    u32 size = compute_pipeline_free_index.size(); 
+
+    if (size) {
+      u32 ix = compute_pipeline_free_index[size - 1];
+      compute_pipeline_free_index.pop_back();
+
+      compute_pipelines[ix] = pipe;
+      return ix;
+    }
+
+    compute_pipelines.push_back(pipe);
+    return compute_pipelines.size() - 1;
+  }
+
+  void PipelineManager::free_pipeline(Context &ctx, ComputePipelineID id) {
+    auto &desc = compute_pipelines[id];
+    
+    if (!desc.layout || !desc.handle) {
+      throw std::runtime_error {"Attempt to double-free compute pipeline"};
+    }
+
+    ctx.get_device().destroyPipeline(desc.handle);
+    ctx.get_device().destroyPipelineLayout(desc.layout);
+
+    desc.handle = nullptr;
+    desc.layout = nullptr;
+    compute_pipeline_free_index.push_back(id);
   }
 }

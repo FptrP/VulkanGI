@@ -3,7 +3,7 @@ import sys
 from os import listdir, path, system
 from os.path import isfile, join
 
-SHADER_EXT = [".frag", ".vert"]
+SHADER_EXT = [".frag", ".vert", ".comp"]
 SPV_EXT = ".spv"
 DIR = "./src/shaders/"
 

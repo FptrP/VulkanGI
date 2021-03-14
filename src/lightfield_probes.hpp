@@ -17,10 +17,13 @@ struct LightField {
   glm::uvec3 get_dimensions() const { return dim; }
   glm::vec3 get_bbox_min() const { return bmin; }
   glm::vec3 get_bbox_max() const { return bmax; }
+  glm::vec3 get_probes_start() const { return probe_start; }
+  glm::vec3 get_probes_step() const { return probe_step; } 
 
   std::vector<LightFieldProbe> get_probes() { return probes; }
   drv::ImageViewID &get_distance_array() { return dist_array; }
   drv::ImageViewID &get_normal_array() { return norm_array; }
+  drv::ImageViewID &get_lowres_array() { return low_res_array; }
 
 private:
   void create_renderpass(DriverState &ds);
@@ -35,6 +38,9 @@ private:
   void render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center);
   void bind_resources(DriverState &ds, Scene &scene);
   
+  void init_compute_resources(DriverState &ds);
+  void downsample_distances(DriverState &ds);
+
   struct UBOData {
     glm::mat4 camera_proj;
     glm::vec4 camera_origin;
@@ -50,7 +56,7 @@ private:
 
   drv::PipelineID pipeline;
   vk::PipelineLayout pipeline_layout;
-  drv::DesciptorSetLayoutID resource_desc;
+  drv::DescriptorSetLayoutID resource_desc;
   drv::DescriptorSetID resource_set;
 
   drv::BufferID ubo;
@@ -58,10 +64,16 @@ private:
   //render to probe resources
   PostProcessingPass<Nil, Nil> lightprobe_pass;
   
+  //Low res filtering
+  drv::ComputePipelineID low_res_pipeline;
+  vk::PipelineLayout low_res_pipeline_layout;
+  drv::DescriptorSetLayoutID low_res_desc_layout;
+  drv::DescriptorSetID low_res_bindings;
 
   glm::uvec3 dim;
   glm::vec3 bmin, bmax;
-  drv::ImageViewID dist_array, norm_array;
+  glm::vec3 probe_start, probe_step;
+  drv::ImageViewID dist_array, norm_array, low_res_array;
   std::vector<LightFieldProbe> probes;
 };
 

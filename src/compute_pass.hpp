@@ -1,0 +1,4 @@
+#ifndef COMPUTE_PASS_HPP_INCLUDED
+#define COMPUTE_PASS_HPP_INCLUDED
+
+#endif

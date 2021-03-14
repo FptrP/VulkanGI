@@ -61,6 +61,17 @@ namespace drv {
     return *this;
   }
 
+  DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::add_storage_image(u32 binding, vk::ShaderStageFlags stages) {
+    vk::DescriptorSetLayoutBinding elem {};
+    elem.setBinding(binding);
+    elem.setDescriptorCount(1);
+    elem.setDescriptorType(vk::DescriptorType::eStorageImage);
+    elem.setStageFlags(stages);
+    
+    bindings.push_back(elem);
+    return *this;
+  }
+
   DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::add_sampler(u32 binding, vk::ShaderStageFlags stages) {
     vk::DescriptorSetLayoutBinding elem {};
     elem.setBinding(binding);

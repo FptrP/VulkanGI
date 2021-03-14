@@ -19,7 +19,7 @@ namespace drv {
     Self add_sampler(u32 binding, vk::ShaderStageFlags stages);
     Self add_array_of_tex(u32 binding, u32 count, vk::ShaderStageFlags stages);
     Self add_input_attachment(u32 binding, vk::ShaderStageFlags stages);
-    //Self add_cubemap_sampler(u32 binding, vk::ShaderStageFlags stages);
+    Self add_storage_image(u32 binding, vk::ShaderStageFlags stages);
 
     vk::DescriptorSetLayoutCreateInfo build();
   
@@ -35,6 +35,14 @@ namespace drv {
     u32 index = ~0u;
   };
 
+  struct ComputePipelineID {
+    ComputePipelineID() {}
+    ComputePipelineID(u32 i) : index {i} {};
+    operator u32() const { return index; }
+  private:
+    u32 index = ~0u;
+  };
+
   struct PipelineDescBuilder;
 
   struct PipelineManager {
@@ -44,11 +52,20 @@ namespace drv {
     PipelineID create_pipeline(Context &ctx, const PipelineDescBuilder &info);
     void free_pipeline(Context &ctx, PipelineID id);
 
+    ComputePipelineID create_compute_pipeline(Context &ctx, const std::string &shader_name, vk::PipelineLayout layout);
+    void free_pipeline(Context &ctx, ComputePipelineID id);
+
     vk::Pipeline &get(PipelineID id) { return pipelines[id].handle; }
     vk::PipelineLayout &get_layout(PipelineID id) { return pipelines[id].layout; }
 
     const vk::Pipeline &get(PipelineID id) const { return pipelines[id].handle; }
     const vk::PipelineLayout &get_layout(PipelineID id) const { return pipelines[id].layout; }
+
+    vk::Pipeline &get(ComputePipelineID id) { return compute_pipelines[id].handle; }
+    vk::PipelineLayout &get_layout(ComputePipelineID id) { return compute_pipelines[id].layout; }
+
+    const vk::Pipeline &get(ComputePipelineID id) const { return compute_pipelines[id].handle; }
+    const vk::PipelineLayout &get_layout(ComputePipelineID id) const { return compute_pipelines[id].layout; }
 
     void release(Context &ctx);
 
@@ -57,6 +74,7 @@ namespace drv {
 
     vk::ShaderModule load_shader(Context &ctx, const std::string &path);
     vk::Pipeline create_pipeline(Context &ctx, PipelineDesc &desc);
+    vk::Pipeline create_pipeline(Context &ctx, const std::string &shader_name, vk::PipelineLayout layout);
 
     struct ShaderDesc {
       std::string path;
@@ -128,9 +146,20 @@ namespace drv {
       }
     };
 
+    struct ComputePipeline {
+      std::string module;
+      vk::PipelineLayout layout;
+      vk::Pipeline handle;
+    };
+
     std::map<std::string, ShaderDesc> shaders;
+
     std::vector<PipelineDesc> pipelines;
     std::vector<u32> free_index;
+    
+    std::vector<ComputePipeline> compute_pipelines;
+    std::vector<u32> compute_pipeline_free_index;
+
     friend PipelineDescBuilder;
   };
 

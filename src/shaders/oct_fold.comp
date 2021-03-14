@@ -1,0 +1,25 @@
+#version 450
+
+layout(set = 0, binding = 0) uniform sampler2DArray src_dist;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2DArray filtered_dist;
+
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+void main() {
+  ivec2 pixel_coord = ivec2(gl_GlobalInvocationID.xy);
+  int layer = int(gl_WorkGroupID.z);
+
+  ivec2 start = 16 * pixel_coord;
+
+  float min_dist = 1e6;
+
+  for (int x = 0; x < 16; x++) {
+    for (int y = 0; y < 16; y++) {
+      ivec3 coord  = ivec3(start + ivec2(x, y), layer);
+      float sampled_dist = texelFetch(src_dist, coord, 0).r;
+      min_dist = min(sampled_dist, min_dist);
+    }
+  }
+  
+  imageStore(filtered_dist, ivec3(pixel_coord, layer), vec4(min_dist, 0, 0, 0));
+}
