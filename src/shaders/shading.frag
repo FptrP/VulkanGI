@@ -55,7 +55,7 @@ void main() {
   vec3 ray_hit;
   uint probe_hit;
   float s = 1.f;
-  vec3 start = world_pos + 0.005 * norm;
+  vec3 start = world_pos + 1e-6 * norm;
 
   if (draw_probes(pc.camera_origin, world_pos)) {
     outColor = vec4(0.8, 0.8, 0.8, 1.f);
@@ -66,9 +66,14 @@ void main() {
   float L_dist = length(L);
   vec2 out_texc;
   int hit = -1;
-  bool ok = trace(start, L/L_dist, L_dist, out_texc, hit); 
+  int result = trace(start, L/L_dist, L_dist, out_texc, hit); 
 
-  if (ok) {
+  if (result == TRACE_RESULT_HIT) {
+    s = 0.f;
+  }
+
+  if (result == TRACE_RESULT_UNKNOWN) {
+    signalColor = vec4(1, 0, 0, 0);
     s = 0.f;
   }
   

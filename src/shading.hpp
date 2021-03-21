@@ -14,6 +14,7 @@ const u32 MAX_PROBES = 256;
 struct ShadingPass {
 
   ShadingPass(DriverState &ds, FrameGlobal &frame) : frame_data {frame} {
+    create_sampler(ds);
     create_shader_desc(ds, frame);
     create_pipeline(ds);
   }
@@ -21,6 +22,7 @@ struct ShadingPass {
   ~ShadingPass() {}
 
   void release(DriverState &ds) {
+    ds.ctx.get_device().destroySampler(nearest_sampler);
     ds.descriptors.free_layout(ds.ctx, tex_layout);
     ds.descriptors.free_layout(ds.ctx, light_field_layout);
     ds.pipelines.free_pipeline(ds.ctx, pipeline);
@@ -79,9 +81,9 @@ struct ShadingPass {
     drv::DescriptorBinder lf_binder { ds.descriptors.get(lf_set) };
     lf_binder
       .bind_ubo(0, ubo->api_buffer())
-      .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), gbuff.sampler)
-      .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), gbuff.sampler)
-      .bind_combined_img(3, frame_data.get_light_field().get_lowres_array()->api_view(), gbuff.sampler)
+      .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), nearest_sampler)
+      .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), nearest_sampler)
+      .bind_combined_img(3, frame_data.get_light_field().get_lowres_array()->api_view(), nearest_sampler)
       .write(ds.ctx);
 
     sets.push_back(lf_set);
@@ -146,11 +148,22 @@ struct ShadingPass {
     draw_ctx.dcb.draw(3, 1, 0, 0);
   }
 
+  void create_sampler(DriverState &ds) {
+    vk::SamplerCreateInfo info {};
+    info.setMinFilter(vk::Filter::eNearest);
+    info.setMagFilter(vk::Filter::eNearest);
+    info.setMipmapMode(vk::SamplerMipmapMode::eNearest);
+    
+    nearest_sampler = ds.ctx.get_device().createSampler(info);
+  }
+
 private:
   drv::PipelineID pipeline;
   drv::DescriptorSetLayoutID tex_layout, light_field_layout;
   vk::PipelineLayout pipeline_layout;
   std::vector<drv::DescriptorSetID> sets;
+
+  vk::Sampler nearest_sampler;
 
   struct LightFieldData {
     glm::vec4 probe_count;

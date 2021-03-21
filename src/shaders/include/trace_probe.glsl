@@ -71,19 +71,7 @@ vec3 nearest_probe(vec3 p) {
   vec3 float_coord = (p - lightfield.probe_start.xyz)/lightfield.probe_step.xyz;
   vec3 base_coord = clamp(floor(float_coord), vec3(0, 0, 0), max_coord);
 
-  float min_dist = 100.0f;
-  vec3 nearest = vec3(-1, -1, -1);
-
-  for (int i = 0; i < 8; ++i) {
-    vec3 new_coords = min(base_coord + vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1), max_coord);
-    float d = length(new_coords - float_coord);
-    if (d < min_dist) {
-      min_dist = d;
-      nearest = new_coords;
-    }
-  }
-
-  return nearest;
+  return base_coord;
 }
 
 int next_index(vec3 p, int i) {
@@ -135,6 +123,22 @@ float dist_to_intersection(in vec3 o, in vec3 d, in vec3 v) {
 
   return -1;
 }
+/*
+float dist_to_intersection(in vec3 o, in vec3 d, in vec3 v) {
+  float numer;
+  float denom = v.y * d.z - v.z * d.y;
+
+  if (abs(denom) > 0.1) {
+    numer = o.y * d.z - o.z * d.y;
+  } else {
+        // We're in the yz plane; use another one
+    numer = o.x * d.y - o.y * d.x;
+    denom = v.x * d.y - v.y * d.x;
+  }
+
+  return numer / denom;
+}*/
+
 
 int trace_high_res(
   in vec3 ray_origin,
@@ -148,10 +152,6 @@ int trace_high_res(
   
   vec2 texc_delta = end_texc - start_texc;
   float texc_distance = length(texc_delta);
-
-  if (texc_distance < 0.001) {
-    return TRACE_RESULT_UNKNOWN;
-  }
 
   vec2 texc_dir = texc_delta * (1.0/texc_distance);
   float texc_step = INV_TEX_SIZE.x * (texc_distance/norminf(texc_delta));
@@ -317,8 +317,8 @@ int trace_segment(
   vec2 texc = start_oct;
   vec2 segment_end = end_oct;
   
-  for (int i = 0; i < 10; i++) {
-    vec2 end_texc;
+  for (int i = 0; i < 256; i++) {
+    vec2 end_texc = segment_end;
     if (!trace_low_res(ray_origin, ray_dir, probe_id, texc, segment_end, end_texc)) {
       return TRACE_RESULT_MISS;
     } else {
@@ -332,7 +332,7 @@ int trace_segment(
     if (dot(texc_dir, segment_end - texc) <= INV_TEX_SIZE.x) {
       return TRACE_RESULT_MISS;
     } else {
-      texc = end_texc + texc_dir;
+      texc = end_texc + texc_dir * INV_TEX_SIZE.x * 0.1;
     }
   }
 
@@ -367,7 +367,7 @@ int trace_probe(
   return TRACE_RESULT_MISS;
 }
 
-bool trace(
+int trace(
   in vec3 ray_origin,
   in vec3 ray_dir,
   inout float tmax,
@@ -382,9 +382,11 @@ bool trace(
   int probes_left = 8;
   float tmin = 0.f;
   
+  int result = TRACE_RESULT_UNKNOWN;
+
   while (probes_left > 0) {
     int probe_id = next_index(base_probe, i);
-    int result = trace_probe(ray_origin, ray_dir, probe_id, tmin, tmax, hittexc);
+    result = trace_probe(ray_origin, ray_dir, probe_id, tmin, tmax, hittexc);
     if (result == TRACE_RESULT_UNKNOWN) {
       i = (i + 3) & 7;
       probes_left--;
@@ -396,7 +398,7 @@ bool trace(
     }
   }
 
-  return (hit_probe > 0);
+  return result;
 }
 
 bool draw_probes(vec3 camera, vec3 world_pos) {
