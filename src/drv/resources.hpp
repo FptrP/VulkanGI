@@ -5,6 +5,8 @@
 #include "memory.hpp"
 #include "rcstorage.hpp"
 
+#include "lib/vk_mem_alloc.h"
+
 namespace drv {
 
   #include <list>
@@ -126,6 +128,8 @@ namespace drv {
 
     void buffer_memcpy_coherent(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size);
     void buffer_memcpy_local(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size);
+
+    VmaAllocator allocator;
 
     GPUMemory memory;
     vk::CommandPool cmd_pool;

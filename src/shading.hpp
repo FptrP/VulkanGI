@@ -10,6 +10,7 @@
 #include <algorithm>
 
 const u32 MAX_PROBES = 256;
+const u32 MAX_LIGHTS = 4;
 
 struct ShadingPass {
 
@@ -58,7 +59,8 @@ struct ShadingPass {
       .add_ubo(0, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(2, vk::ShaderStageFlagBits::eFragment)
-      .add_combined_sampler(3, vk::ShaderStageFlagBits::eFragment);
+      .add_combined_sampler(3, vk::ShaderStageFlagBits::eFragment)
+      .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment); //radiance array
     
     light_field_layout = ds.descriptors.create_layout(ds.ctx, lf.build(), 1);
     auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
@@ -84,6 +86,7 @@ struct ShadingPass {
       .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), nearest_sampler)
       .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), nearest_sampler)
       .bind_combined_img(3, frame_data.get_light_field().get_lowres_array()->api_view(), nearest_sampler)
+      .bind_combined_img(4, frame_data.get_light_field().get_radiance_array()->api_view(), frame_data.get_gbuffer().sampler)
       .write(ds.ctx);
 
     sets.push_back(lf_set);
@@ -170,6 +173,12 @@ private:
     glm::vec4 probe_start;
     glm::vec4 probe_step;
     glm::vec4 positions[MAX_PROBES];
+  };
+
+  struct LightSourceData {
+    glm::vec4 lights_count;
+    glm::vec4 position[MAX_LIGHTS];
+    glm::vec4 radiance[MAX_LIGHTS];
   };
 
   drv::BufferID ubo;

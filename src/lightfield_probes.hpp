@@ -24,7 +24,8 @@ struct LightField {
   drv::ImageViewID &get_distance_array() { return dist_array; }
   drv::ImageViewID &get_normal_array() { return norm_array; }
   drv::ImageViewID &get_lowres_array() { return low_res_array; }
-
+  drv::ImageViewID &get_radiance_array() { return radiance_array; }
+  
 private:
   void create_renderpass(DriverState &ds);
   void create_framebuffer(DriverState &ds);
@@ -73,7 +74,7 @@ private:
   glm::uvec3 dim;
   glm::vec3 bmin, bmax;
   glm::vec3 probe_start, probe_step;
-  drv::ImageViewID dist_array, norm_array, low_res_array;
+  drv::ImageViewID dist_array, norm_array, low_res_array, radiance_array;
   std::vector<LightFieldProbe> probes;
 };
 

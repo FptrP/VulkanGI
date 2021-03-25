@@ -11,12 +11,11 @@ layout (set = 0, binding = 2) uniform samplerCube norm_cm;
 
 layout(location = 0) out float out_dist;
 layout(location = 1) out vec4 out_norm;
-//layout(location = 2) out vec4 out_norm;
+layout(location = 2) out vec4 out_color;
 
 void main() {
   vec3 dir = oct_to_sphere(uv);
   out_dist = texture(dist_cm, dir).r;
   out_norm = texture(norm_cm, dir);
-  //out_color = texture(color_cm, dir);
-  //out_norm = texture(norm_cm, dir);
+  out_color = texture(color_cm, dir);
 }

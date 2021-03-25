@@ -1,5 +1,10 @@
 #include "resources.hpp"
 #include <iostream>
+
+#define VMA_IMPLEMENTATION
+#include "lib/vk_mem_alloc.h"
+
+
 namespace drv {
 
 

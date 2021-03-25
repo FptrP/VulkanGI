@@ -187,6 +187,7 @@ void Scene::gen_textures(DriverState &ds) {
       auto img = ds.storage.load_image2D(ds.ctx, desc.albedo_path.c_str());
       auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
       mat.albedo_tex = view;
+      ds.storage.collect_buffers(ds.ctx);
     }
     tex_materials.push_back(mat);
   }

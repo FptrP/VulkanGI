@@ -28,6 +28,9 @@ uniform sampler2DArray probe_norm;
 layout(set = LIGHTFIELD_SET, binding = LIGHTFIELD_LOW_RES_BIND)
 uniform sampler2DArray probe_low_res;
 
+layout(set = LIGHTFIELD_SET, binding = 4)
+uniform sampler2DArray probe_radiance;
+
 #define TRACE_RESULT_MISS    0
 #define TRACE_RESULT_HIT     1
 #define TRACE_RESULT_UNKNOWN 2
@@ -317,7 +320,7 @@ int trace_segment(
   vec2 texc = start_oct;
   vec2 segment_end = end_oct;
   
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 32; i++) {
     vec2 end_texc = segment_end;
     if (!trace_low_res(ray_origin, ray_dir, probe_id, texc, segment_end, end_texc)) {
       return TRACE_RESULT_MISS;

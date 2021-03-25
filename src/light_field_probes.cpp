@@ -118,15 +118,17 @@ void LightField::create_pipeline_layout(DriverState &ds) {
   drv::DescriptorSetLayoutBuilder builder {};
   builder
     .add_ubo(0, vk::ShaderStageFlagBits::eVertex)
-    .add_storage_buffer(1, vk::ShaderStageFlagBits::eVertex);
+    .add_storage_buffer(1, vk::ShaderStageFlagBits::eVertex)
+    .add_array_of_tex(2, 25, vk::ShaderStageFlagBits::eFragment)
+    .add_sampler(3, vk::ShaderStageFlagBits::eFragment);
   
   resource_desc = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
   resource_set = ds.descriptors.allocate_set(ds.ctx, resource_desc);
 
   vk::PushConstantRange range {};
   range.setOffset(0);
-  range.setSize(sizeof(u32));
-  range.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+  range.setSize(2 * sizeof(u32));
+  range.setStageFlags(vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment);
 
   auto set_layouts = { ds.descriptors.get(resource_desc) };
   auto ranges = { range };
@@ -152,6 +154,7 @@ void LightField::create_pipeline(DriverState &ds) {
     
     .add_attribute(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, pos))
     .add_attribute(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(SceneVertex, norm))
+    .add_attribute(2, 0, vk::Format::eR32G32Sfloat, offsetof(SceneVertex, uv))
     .add_binding(0, sizeof(SceneVertex), vk::VertexInputRate::eVertex)
 
     .set_vertex_assembly(vk::PrimitiveTopology::eTriangleList, false)
@@ -192,6 +195,7 @@ void LightField::init(DriverState &ds) {
   lightprobe_pass
     .init_attachment(vk::Format::eR32Sfloat) //distance
     .init_attachment(vk::Format::eR16G16B16A16Sfloat) //normal
+    .init_attachment(vk::Format::eR16G16B16A16Sfloat) //radiance
     .init(ds, 3, "cube_probe_to_oct_fs");
   
   init_compute_resources(ds);
@@ -260,8 +264,10 @@ void LightField::render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center
     auto &materials = scene.get_material_desc();
     for (auto &obj : objects) {
       if (materials[obj.material_index].albedo_path.empty()) continue;
-      u32 mat_id = obj.matrix_index;
-      cmd.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0u, sizeof(u32), &mat_id);
+      u32 pc_data[2];
+      pc_data[0] = obj.matrix_index;
+      pc_data[1] = obj.material_index; 
+      cmd.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment, 0u, 2*sizeof(u32), pc_data);
       cmd.drawIndexed(obj.index_count, 1, obj.index_offset, obj.vertex_offset, 0);
     }    
 
@@ -283,10 +289,19 @@ void LightField::render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center
 }
 
 void LightField::bind_resources(DriverState &ds, Scene &scene) {
+  std::vector<vk::ImageView> api_views;
+  for (auto &mat : scene.get_materials()) {
+    if (mat.albedo_tex.is_nullptr()) continue;
+
+    api_views.push_back(mat.albedo_tex->api_view());
+  }
+
   drv::DescriptorBinder bind {ds.descriptors.get(resource_set)};
   bind
     .bind_ubo(0, ubo->api_buffer())
-    .bind_storage_buff(1, scene.get_matrix_buff()->api_buffer());
+    .bind_storage_buff(1, scene.get_matrix_buff()->api_buffer())
+    .bind_array_of_img(2, api_views.size(), api_views.data())
+    .bind_sampler(3, sampler);
   
   bind.write(ds.ctx);
 }
@@ -299,6 +314,9 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
 
   auto norm_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, ARR_USG, layers);
   norm_array = ds.storage.create_2Darray_view(ds.ctx, norm_img, vk::ImageAspectFlagBits::eColor);
+
+  auto radiance_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, ARR_USG, layers);
+  radiance_array = ds.storage.create_2Darray_view(ds.ctx, radiance_img, vk::ImageAspectFlagBits::eColor);
 
   dim = d;
   this->bmax = bmax;
@@ -325,10 +343,12 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
         u32 index = probes.size();
         auto layer_view = ds.storage.create_2Dlayer_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor, index);
         auto norm_view = ds.storage.create_2Dlayer_view(ds.ctx, norm_img, vk::ImageAspectFlagBits::eColor, index);
+        auto radiance_view = ds.storage.create_2Dlayer_view(ds.ctx, radiance_img, vk::ImageAspectFlagBits::eColor, index);
 
         lightprobe_pass.set_render_area(OCT_RES, OCT_RES);
         lightprobe_pass.set_attachment(0, layer_view);
         lightprobe_pass.set_attachment(1, norm_view);
+        lightprobe_pass.set_attachment(2, radiance_view);
         lightprobe_pass.set_image_sampler(0, cm_dist, sampler);
         lightprobe_pass.set_image_sampler(1, cm_color, sampler);
         lightprobe_pass.set_image_sampler(2, cm_norm, sampler);

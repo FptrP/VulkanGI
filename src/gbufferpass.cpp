@@ -1,21 +1,6 @@
 #include "triangle.hpp"
 
 void GBufferSubpass::create_texture_sets(DriverState &ds) {
-  /*vk::ImageSubresourceRange i_range {};
-  i_range
-    .setAspectMask(vk::ImageAspectFlagBits::eColor)
-    .setBaseArrayLayer(0)
-    .setBaseMipLevel(0)
-    .setLayerCount(1)
-    .setLevelCount(~0u);
-    
-  for (auto &mat : frame_data.get_scene().get_material_desc()) {
-    if (mat.albedo_path.empty()) continue;
-    auto img = ds.storage.load_image2D(ds.ctx, mat.albedo_path.c_str());
-    auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
-    images.push_back(view);
-  }*/
-
   std::vector<vk::ImageView> api_views;
   for (auto &mat : frame_data.get_scene().get_materials()) {
     if (mat.albedo_tex.is_nullptr()) continue;
