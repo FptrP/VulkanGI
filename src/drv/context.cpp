@@ -23,6 +23,7 @@ namespace drv {
 
   void Context::init_instance() {
     vk::ApplicationInfo app_info {};
+    app_info.apiVersion = VK_API_VERSION_1_2;
     app_info.setEngineVersion(VK_MAKE_VERSION(1, 0, 0));
     app_info.setApplicationVersion(VK_MAKE_VERSION(1, 0, 0));
     app_info.setPEngineName("NONAME");

@@ -28,6 +28,8 @@ namespace drv {
     void release();
 
     std::vector<vk::Image> &get_swapchain_images() { return swapchain_images; }
+
+    vk::Instance &get_instance() { return instance; }
     vk::Device &get_device() { return device; }
     vk::SwapchainKHR &get_swapchain() { return swapchain; }
     vk::PhysicalDevice &get_physical_device() { return physical_device; }

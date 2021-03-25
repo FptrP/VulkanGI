@@ -11,22 +11,35 @@ namespace drv {
 
   static void gen_mipmaps(Image &img, vk::CommandBuffer &cmd);
 
-  ImageID ResourceStorage::create_image(Context &ctx, const vk::ImageCreateInfo &info, const void *pixels) {
-    if (!pixels) throw std::runtime_error {"empty textures not supported"};
-
-    Image img;
+  void ResourceStorage::fill_image_info(Context &ctx, const vk::ImageCreateInfo &info, Image &img) {
     img.info = info;
     img.info.initialLayout = vk::ImageLayout::eUndefined;
     img.layout = img.info.initialLayout;
     img.info.queueFamilyIndexCount = ctx.queue_family_count();
     img.info.pQueueFamilyIndices = ctx.get_queue_indexes();
-    img.info.format = vk::Format::eR8G8B8A8Srgb;
-    img.info.usage |= vk::ImageUsageFlagBits::eTransferDst;
+    img.mem_type = GPUMemoryT::Local;
 
-    img.handle = ctx.get_device().createImage(img.info);
-    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
-    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
-    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
+    auto api_info = static_cast<VkImageCreateInfo>(info);
+    VkImage api_image;
+    auto alloc_info = get_alloc_info(GPUMemoryT::Local);
+
+    if (vmaCreateImage(allocator, &api_info, &alloc_info, &api_image, &img.allocation, nullptr) != VK_SUCCESS) {
+      throw std::runtime_error {"Vma image create error"};
+    }
+
+    img.handle = api_image;
+    
+  }
+
+  ImageID ResourceStorage::create_image(Context &ctx, const vk::ImageCreateInfo &info, const void *pixels) {
+    if (!pixels) throw std::runtime_error {"empty textures not supported"};
+
+    vk::ImageCreateInfo patched_info = info;
+    patched_info.format = vk::Format::eR8G8B8A8Srgb;
+    patched_info.usage |= vk::ImageUsageFlagBits::eTransferDst;
+
+    Image img;
+    fill_image_info(ctx, patched_info, img);
 
   
     vk::DeviceSize bufsz = img.info.extent.width * img.info.extent.height * 4;
@@ -131,16 +144,8 @@ namespace drv {
       .setTiling(vk::ImageTiling::eOptimal)
       .setUsage(vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc);
     
-    auto handle = ctx.get_device().createImage(info);
-    auto rq = ctx.get_device().getImageMemoryRequirements(handle);
-    auto blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
-    ctx.get_device().bindImageMemory(handle, blk.memory, blk.offset);
-
     Image img;
-    img.handle = handle;
-    img.blk = blk;
-    img.info = info;
-    img.mem_type = GPUMemoryT::Local;
+    fill_image_info(ctx, info, img);
     std::cout << "image " << t_w << " " << t_h << " " << t_c << "\n";
 
     u32 buffsz = t_w * t_h * 4;
@@ -200,7 +205,7 @@ namespace drv {
       img.layout = vk::ImageLayout::eShaderReadOnlyOptimal;
     }
 
-    collect_buffers(ctx);
+    collect_buffers();
     return images.create(img);    
   }
 
@@ -210,39 +215,37 @@ namespace drv {
 
   ImageID ResourceStorage::create_rt(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage) {
     Image img;
-    img.info.format = fmt;
-    img.info.imageType = vk::ImageType::e2D;
-    img.info.initialLayout = vk::ImageLayout::eUndefined;
-    img.info.extent = vk::Extent3D {width, height, 1};
-    img.info.mipLevels = 1;
-    img.info.arrayLayers = 1;
-    img.info
+
+    vk::ImageCreateInfo info {};
+    info.format = fmt;
+    info.imageType = vk::ImageType::e2D;
+    info.initialLayout = vk::ImageLayout::eUndefined;
+    info.extent = vk::Extent3D {width, height, 1};
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info
       .setQueueFamilyIndexCount(ctx.queue_family_count())
       .setPQueueFamilyIndices(ctx.get_queue_indexes())
       .setSamples(vk::SampleCountFlagBits::e1)
       .setTiling(vk::ImageTiling::eOptimal)
       .setUsage(usage);
     
-    img.handle = ctx.get_device().createImage(img.info);
-    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
-    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
-    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
-
-    img.layout = vk::ImageLayout::eUndefined;
-    img.mem_type = GPUMemoryT::Local;
+    fill_image_info(ctx, info, img);
   
     return images.create(img);
   }
 
   ImageID ResourceStorage::create_cubemap(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage) {
     Image img;
-    img.info.format = fmt;
-    img.info.imageType = vk::ImageType::e2D;
-    img.info.initialLayout = vk::ImageLayout::eUndefined;
-    img.info.extent = vk::Extent3D {width, height, 1};
-    img.info.mipLevels = 1;
-    img.info.arrayLayers = 6;
-    img.info
+
+    vk::ImageCreateInfo info {};
+    info.format = fmt;
+    info.imageType = vk::ImageType::e2D;
+    info.initialLayout = vk::ImageLayout::eUndefined;
+    info.extent = vk::Extent3D {width, height, 1};
+    info.mipLevels = 1;
+    info.arrayLayers = 6;
+    info
       .setQueueFamilyIndexCount(ctx.queue_family_count())
       .setPQueueFamilyIndices(ctx.get_queue_indexes())
       .setSamples(vk::SampleCountFlagBits::e1)
@@ -250,16 +253,7 @@ namespace drv {
       .setFlags(vk::ImageCreateFlagBits::eCubeCompatible)
       .setUsage(usage);
     
-    
-
-    img.handle = ctx.get_device().createImage(img.info);
-    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
-    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
-    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
-
-    img.layout = vk::ImageLayout::eUndefined;
-    img.mem_type = GPUMemoryT::Local;
-  
+    fill_image_info(ctx, info, img);
     return images.create(img);
   }
 
@@ -346,13 +340,14 @@ namespace drv {
     u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers) 
   {
     Image img;
-    img.info.format = fmt;
-    img.info.imageType = vk::ImageType::e2D;
-    img.info.initialLayout = vk::ImageLayout::eUndefined;
-    img.info.extent = vk::Extent3D {width, height, 1};
-    img.info.mipLevels = 1;
-    img.info.arrayLayers = layers;
-    img.info
+    vk::ImageCreateInfo info {};
+    info.format = fmt;
+    info.imageType = vk::ImageType::e2D;
+    info.initialLayout = vk::ImageLayout::eUndefined;
+    info.extent = vk::Extent3D {width, height, 1};
+    info.mipLevels = 1;
+    info.arrayLayers = layers;
+    info
       .setQueueFamilyIndexCount(ctx.queue_family_count())
       .setPQueueFamilyIndices(ctx.get_queue_indexes())
       .setSamples(vk::SampleCountFlagBits::e1)
@@ -361,13 +356,7 @@ namespace drv {
       .setUsage(usage);
     
     
-    img.handle = ctx.get_device().createImage(img.info);
-    auto rq =  ctx.get_device().getImageMemoryRequirements(img.handle);
-    img.blk = memory.allocate(GPUMemoryT::Local, rq.size, rq.alignment);
-    ctx.get_device().bindImageMemory(img.handle, img.blk.memory, img.blk.offset);
-
-    img.layout = vk::ImageLayout::eUndefined;
-    img.mem_type = GPUMemoryT::Local;
+    fill_image_info(ctx, info, img);
   
     return images.create(img);
   }

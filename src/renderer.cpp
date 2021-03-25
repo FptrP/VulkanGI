@@ -12,12 +12,13 @@ void Renderer::init(SDL_Window *w) {
   ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
   ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
-  frame_data.init(ds);
+  frame_data = new FrameGlobal{};
+  frame_data->init(ds);
 
-  gbuffer_subpass = new GBufferSubpass{frame_data};
+  gbuffer_subpass = new GBufferSubpass{*frame_data};
   gbuffer_subpass->init(ds);
 
-  shading_subpass = new ShadingPass{ds, frame_data};
+  shading_subpass = new ShadingPass{ds, *frame_data};
 }
 
 void Renderer::release() {
@@ -28,7 +29,8 @@ void Renderer::release() {
   delete gbuffer_subpass;
 
   ds.submit_pool.release(ds.ctx);
-  frame_data.release(ds);
+  frame_data->release(ds);
+  delete frame_data;
   ds.pipelines.release(ds.ctx);
   ds.storage.release(ds.ctx);
   ds.ctx.get_device().destroyRenderPass(ds.main_renderpass);
@@ -85,7 +87,7 @@ vk::RenderPass Renderer::create_main_renderpass() {
 
 void Renderer::create_framebuffers(std::vector<vk::Framebuffer> &fb) {
   auto &images = ds.submit_pool.get_backbuffer_views();
-  auto &gbuf = frame_data.get_gbuffer();
+  auto &gbuf = frame_data->get_gbuffer();
   auto ext = ds.ctx.get_swapchain_extent();
 
   for (u32 i = 0; i < images.size(); i++) {
@@ -105,7 +107,7 @@ void Renderer::create_framebuffers(std::vector<vk::Framebuffer> &fb) {
 }
 
 void Renderer::update(float dt) {
-  frame_data.update(dt);
+  frame_data->update(dt);
   gbuffer_subpass->update(dt);
 }
 
@@ -118,7 +120,7 @@ void Renderer::handle_event(const SDL_Event &event) {
     events_msk.store((u32)RenderEvents::ReloadShaders, std::memory_order_relaxed);
   }
 
-  frame_data.handle_events(event);
+  frame_data->handle_events(event);
 }
 
 void Renderer::render(drv::DrawContext &dctx) {

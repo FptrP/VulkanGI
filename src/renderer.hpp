@@ -36,7 +36,7 @@ private:
   SDL_Window *window = nullptr;
 
   std::atomic<u32> events_msk;
-  FrameGlobal frame_data;
+  FrameGlobal *frame_data = nullptr;
   GBufferSubpass *gbuffer_subpass = nullptr;
   ShadingPass *shading_subpass = nullptr;
   CubemapShadowRenderer *renderer = nullptr;

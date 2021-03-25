@@ -7,6 +7,7 @@
 
 namespace drv {
 
+  #define VMA_CHECK(exp, msg) if ((exp) != VK_SUCCESS) throw std::runtime_error{msg}
 
   BufferID ResourceStorage::create_buffer(Context &ctx, GPUMemoryT type, 
                            vk::DeviceSize size, vk::BufferUsageFlags usage,
@@ -24,17 +25,16 @@ namespace drv {
     info.setPQueueFamilyIndices(ctx.get_queue_indexes());
     info.setQueueFamilyIndexCount(ctx.queue_family_count());
 
+    auto allocation_info = get_alloc_info(type);
+    auto raw_info = static_cast<VkBufferCreateInfo>(info);
 
-    auto buffer = ctx.get_device().createBuffer(info);
-
-    auto mem_info = ctx.get_device().getBufferMemoryRequirements(buffer);
-    auto blk = memory.allocate(type, mem_info.size, mem_info.alignment);
-
-    ctx.get_device().bindBufferMemory(buffer, blk.memory, blk.offset);
+    VkBuffer handle;
+    VmaAllocation allocation;
+    VMA_CHECK(vmaCreateBuffer(allocator, &raw_info, &allocation_info, &handle, &allocation, nullptr), "Buffer create error");
 
     Buffer cell;
-    cell.blk = blk;
-    cell.handle = buffer;
+    cell.allocation = allocation;
+    cell.handle = handle;
     cell.mem_type = type;
     cell.sharing_mode = mode;
     cell.usage = usage;
@@ -42,18 +42,20 @@ namespace drv {
     return buffers.create(cell);
   }
 
-  void ResourceStorage::collect_buffers(Context &ctx) {
-    buffers.collect(ctx, memory);
+  void ResourceStorage::collect_buffers() {
+    buffers.collect(allocator);
   }
 
   void* ResourceStorage::map_buffer(Context &ctx, const BufferID &id) {
-    const auto &blk = (*id).blk;
 
-    return ctx.get_device().mapMemory(blk.memory, blk.offset, blk.size);
+    void *ptr = nullptr;
+    
+    VMA_CHECK(vmaMapMemory(allocator, id->get_allocation(), &ptr), "Vma map memory error");
+    return ptr;
   }
 
   void ResourceStorage::unmap_buffer(Context &ctx, const BufferID &id) {
-    ctx.get_device().unmapMemory((*id).blk.memory);
+    vmaUnmapMemory(allocator, id->get_allocation());
   }
 
   Buffer& ResourceStorage::get(BufferID &id) {
@@ -61,7 +63,19 @@ namespace drv {
   }
 
   void ResourceStorage::init(Context &ctx) {
-    memory.init(ctx, 32u<<20u, 2048u<<20u);
+
+    {
+      VmaAllocatorCreateInfo info {};
+      info.device = static_cast<VkDevice>(ctx.get_device());
+      info.physicalDevice = static_cast<VkPhysicalDevice>(ctx.get_physical_device());
+      info.instance = static_cast<VkInstance>(ctx.get_instance());
+      info.vulkanApiVersion = VK_API_VERSION_1_2;
+
+      auto result = vmaCreateAllocator(&info, &allocator);
+      if (result != VK_SUCCESS) {
+        throw std::runtime_error {"VMA allocator create error"};
+      }
+    }
 
     vk::CommandPoolCreateInfo info {};
     info.setQueueFamilyIndex(ctx.queue_index(QueueT::Transfer));
@@ -73,9 +87,10 @@ namespace drv {
     ctx.get_device().destroyCommandPool(cmd_pool);
 
     views.collect(ctx);
-    collect_buffers(ctx);
-    images.collect(ctx, memory);
-    memory.release(ctx);
+    collect_buffers();
+    images.collect(allocator);
+
+    vmaDestroyAllocator(allocator);
   }
 
   vk::CommandBuffer ResourceStorage::begin_transfer(Context &ctx) {
@@ -108,7 +123,11 @@ namespace drv {
 
   void ResourceStorage::buffer_memcpy(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size) {
     auto &cell = *dst;
-    if (cell.blk.size < offst + size) {
+
+    VmaAllocationInfo info {};
+    vmaGetAllocationInfo(allocator, dst->get_allocation(), &info);
+
+    if (info.size < offst + size) {
       throw std::runtime_error {"Bad memory write"};
     }
 
@@ -116,15 +135,16 @@ namespace drv {
       buffer_memcpy_coherent(ctx, dst, offst, src, size);
     } else {
       buffer_memcpy_local(ctx, dst, offst, src, size);
-      collect_buffers(ctx);
+      collect_buffers();
     }
   }
 
   void ResourceStorage::buffer_memcpy_coherent(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size) {
     const auto& cell = *dst;
-    auto ptr = ctx.get_device().mapMemory(cell.blk.memory, cell.blk.offset + offst, cell.blk.size - offst);
-    std::memcpy(ptr, src, size);
-    ctx.get_device().unmapMemory(cell.blk.memory);
+
+    char  *ptr = static_cast<char*>(map_buffer(ctx, dst)); 
+    std::memcpy(ptr + offst, src, size);
+    unmap_buffer(ctx, dst);
   }
 
   void ResourceStorage::buffer_memcpy_local(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size) {

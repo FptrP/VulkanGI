@@ -19,19 +19,18 @@ namespace drv {
     operator vk::Buffer&() { return handle; }
     operator const vk::Buffer&() const { return handle; }
   
-    const MemoryBlock& get_memory() const { return blk; }
+    VmaAllocation get_allocation() const { return allocation; }
     GPUMemoryT get_memory_type() const { return mem_type; }
 
-    void release(Context &ctx, GPUMemory &memory) {
-      memory.free(mem_type, blk.offset);
-      ctx.get_device().destroyBuffer(handle);
+    void release(VmaAllocator allocator) {
+      vmaDestroyBuffer(allocator, handle, allocation);
     }
 
     const vk::Buffer& api_buffer() const { return handle; }
 
   private:
     
-    MemoryBlock blk;
+    VmaAllocation allocation;
     GPUMemoryT mem_type;
 
     vk::BufferUsageFlags usage;
@@ -42,19 +41,18 @@ namespace drv {
   };
 
   struct Image {
-    const MemoryBlock& get_memory() const { return blk; }
+    VmaAllocation get_allocation() const { return allocation; }
     GPUMemoryT get_memory_type() const { return mem_type; }
 
-    void release(Context &ctx, GPUMemory &memory) {
-      memory.free(mem_type, blk.offset);
-      ctx.get_device().destroyImage(handle);
+    void release(VmaAllocator allocator) {
+      vmaDestroyImage(allocator, handle, allocation);
     }
 
     const vk::Image& api_image() const { return handle; }
     vk::Image& api_image() { return handle; }
     const vk::ImageCreateInfo &get_info() const { return info; }
   private:
-    MemoryBlock blk;
+    VmaAllocation allocation;
     GPUMemoryT mem_type;
 
     vk::ImageCreateInfo info {};
@@ -104,7 +102,7 @@ namespace drv {
     void* map_buffer(Context &ctx, const BufferID &id);
     void unmap_buffer(Context &ctx, const BufferID &id);
     void buffer_memcpy(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size);
-    void collect_buffers(Context &ctx);
+    void collect_buffers();
     Buffer &get(BufferID &id);
     const Buffer &get(const BufferID &id) const;
 
@@ -123,6 +121,20 @@ namespace drv {
     ImageViewID create_2Dlayer_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, u32 layer);
 
   private: 
+
+    void fill_image_info(Context &ctx, const vk::ImageCreateInfo &info, Image &img);
+
+    VmaAllocationCreateInfo get_alloc_info(GPUMemoryT type) const {
+      VmaAllocationCreateInfo info {};
+      if (type == GPUMemoryT::Local) {
+        info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+      }
+      if (type == GPUMemoryT::Coherent) {
+        info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+      }
+      return info;
+    }
+
     vk::CommandBuffer begin_transfer(Context &ctx);
     void submit_and_wait(Context &ctx, vk::CommandBuffer &cmd);
 
@@ -130,8 +142,6 @@ namespace drv {
     void buffer_memcpy_local(Context &ctx, const BufferID &dst, vk::DeviceSize offst, const void *src, vk::DeviceSize size);
 
     VmaAllocator allocator;
-
-    GPUMemory memory;
     vk::CommandPool cmd_pool;
     RCStorage<Buffer> buffers;
     RCStorage<Image> images;
