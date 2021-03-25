@@ -40,11 +40,18 @@ struct SceneMaterialDesc {
 struct SceneLight {
   glm::vec3 position {};
   glm::vec3 color {};
-  drv::ImageViewID shadow {};
+  u32 shadow_layer;
 };
 
 struct SceneMaterial {
-  drv::ImageViewID albedo_tex {};
+  int albedo_tex_id;
+  int mr_tex_id;
+};
+
+struct SceneTextures {
+  std::vector<SceneMaterial> materials;
+  std::vector<drv::ImageViewID> albedo_images;
+  std::vector<drv::ImageViewID> mr_images;
 };
 
 struct Scene {
@@ -70,7 +77,9 @@ struct Scene {
   std::vector<SceneLight> &get_lights() { return scene_lights; }
 
   void gen_textures(DriverState &ds);
-  std::vector<SceneMaterial> &get_materials() { return tex_materials; }
+  SceneTextures &get_materials() { return scene_textures; }
+
+  drv::ImageViewID get_shadows_array() { return oct_shadows_array; }
 
 private:
   void process_meshes(const aiScene *scene);
@@ -85,9 +94,12 @@ private:
   std::vector<SceneMesh> meshes;
   std::vector<SceneMaterialDesc> materials;
   std::vector<SceneLight> scene_lights;
-  std::vector<SceneMaterial> tex_materials;
+  
+  SceneTextures scene_textures;
 
   drv::BufferID verts_buff, index_buff, matrix_buff;
+  
+  drv::ImageViewID oct_shadows_array;
 
   std::string model_path;
 };

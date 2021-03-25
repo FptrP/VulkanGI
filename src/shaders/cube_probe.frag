@@ -20,5 +20,8 @@ layout (push_constant) uniform PushData {
 void main() {
   dist = length(world_view);
   color = texture(sampler2D(textures[pc.albedo_id], tex_smp), uv);
+  if (color.a == 0) {
+    discard;
+  }
   norm = vec4(world_normal, 1);
 }

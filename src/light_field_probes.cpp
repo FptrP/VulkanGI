@@ -261,12 +261,16 @@ void LightField::render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center
     cmd.bindIndexBuffer(scene.get_index_buff()->api_buffer(), 0, vk::IndexType::eUint32);
 
     const auto& objects = scene.get_objects(); 
-    auto &materials = scene.get_material_desc();
+    auto &tex_info = scene.get_materials();
+    
     for (auto &obj : objects) {
-      if (materials[obj.material_index].albedo_path.empty()) continue;
+      auto albedo_id = tex_info.materials[obj.material_index].albedo_tex_id;
+      
+      if (albedo_id < 0) continue;
+
       u32 pc_data[2];
       pc_data[0] = obj.matrix_index;
-      pc_data[1] = obj.material_index; 
+      pc_data[1] = albedo_id; 
       cmd.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment, 0u, 2*sizeof(u32), pc_data);
       cmd.drawIndexed(obj.index_count, 1, obj.index_offset, obj.vertex_offset, 0);
     }    
@@ -290,10 +294,8 @@ void LightField::render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center
 
 void LightField::bind_resources(DriverState &ds, Scene &scene) {
   std::vector<vk::ImageView> api_views;
-  for (auto &mat : scene.get_materials()) {
-    if (mat.albedo_tex.is_nullptr()) continue;
-
-    api_views.push_back(mat.albedo_tex->api_view());
+  for (auto &view : scene.get_materials().albedo_images) {
+    api_views.push_back(view->api_view());
   }
 
   drv::DescriptorBinder bind {ds.descriptors.get(resource_set)};

@@ -13,7 +13,7 @@ struct FrameGlobal {
     scene.load("assets/Sponza/glTF/Sponza.gltf", "assets/Sponza/glTF/");
     scene.gen_buffers(ds);
 
-    scene.add_light({0.f, 4.f, 0.f}, {1.f, 1.f, 1.f});
+    scene.add_light({0.f, 4.f, 0.f}, {10.f, 10.f, 10.f});
     scene.gen_shadows(ds);
 
     scene.gen_textures(ds);

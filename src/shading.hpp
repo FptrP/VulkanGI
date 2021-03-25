@@ -30,13 +30,25 @@ struct ShadingPass {
   }
 
   void create_shader_desc(DriverState &ds, FrameGlobal &frame) {
+    light_data = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(LightSourceData), vk::BufferUsageFlagBits::eUniformBuffer);
+    LightSourceData lights{};
+    lights.lights_count.x = min(u32(frame_data.get_scene().get_lights().size()), MAX_LIGHTS);
+
+    for (u32 i = 0; i < lights.lights_count.x; i++) {
+      lights.position[i] = glm::vec4{frame_data.get_scene().get_lights()[i].position, 0.f};
+      lights.radiance[i] = glm::vec4{frame_data.get_scene().get_lights()[i].color, 0.f};
+    }
+
+    ds.storage.buffer_memcpy(ds.ctx, light_data, 0, &lights, sizeof(lights));
+
     drv::DescriptorSetLayoutBuilder tex {};
     tex
       .add_combined_sampler(0, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(2, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(3, vk::ShaderStageFlagBits::eFragment)
-      .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment);
+      .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment)
+      .add_ubo(5, vk::ShaderStageFlagBits::eFragment);
     
     tex_layout = ds.descriptors.create_layout(ds.ctx, tex.build(), 1);
     auto tex_set = ds.descriptors.allocate_set(ds.ctx, tex_layout);
@@ -49,7 +61,8 @@ struct ShadingPass {
       .bind_combined_img(1, gbuff.images[1]->api_view(), gbuff.sampler)
       .bind_combined_img(2, gbuff.images[2]->api_view(), gbuff.sampler)
       .bind_combined_img(3, gbuff.images[3]->api_view(), gbuff.sampler)
-      .bind_combined_img(4, frame_data.get_scene().get_lights().at(0).shadow->api_view(), gbuff.sampler);
+      .bind_combined_img(4, frame_data.get_scene().get_shadows_array()->api_view(), gbuff.sampler)
+      .bind_ubo(5, light_data->api_buffer());
       
     binder.write(ds.ctx);
     sets.push_back(tex_set);
@@ -66,6 +79,7 @@ struct ShadingPass {
     auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
 
     ubo = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(LightFieldData), vk::BufferUsageFlagBits::eUniformBuffer);
+    
 
     LightFieldData data;
     data.probe_count = glm::vec4{ frame_data.get_light_field().get_dimensions(), 0.f};
@@ -181,7 +195,7 @@ private:
     glm::vec4 radiance[MAX_LIGHTS];
   };
 
-  drv::BufferID ubo;
+  drv::BufferID ubo, light_data;
   //drv::BufferID ubo[drv::MAX_FRAMES_IN_FLIGHT];
   FrameGlobal &frame_data;
 };

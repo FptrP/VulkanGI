@@ -5,6 +5,8 @@
 #include <iostream>
 
 #include "cubemap_shadow.hpp"
+#include "postprocessing.hpp"
+
 
 void Scene::load(const std::string &path, const std::string &folder) {
   Assimp::Importer importer {};
@@ -78,7 +80,19 @@ void Scene::process_materials(const aiScene *scene) {
       aiString path;
       scene_mt->GetTexture(aiTextureType_DIFFUSE, 0, &path);
       mat.albedo_path = path.C_Str();
-      mat.albedo_path = model_path + mat.albedo_path;
+      
+      if (mat.albedo_path.length()) {
+        mat.albedo_path = model_path + mat.albedo_path;
+      }
+
+      path.Clear();
+
+      scene_mt->GetTexture(aiTextureType_UNKNOWN, 0, &path);
+      mat.mr_path = path.C_Str();
+      
+      if (mat.mr_path.length()) {
+        mat.mr_path = model_path + mat.mr_path;
+      }
     } else {
       std::cout << "No textures\n";
     }
@@ -87,7 +101,7 @@ void Scene::process_materials(const aiScene *scene) {
   }
 
   for (u32 i = 0; i < materials.size(); i++) {
-    std::cout << "(" << materials[i].albedo_path << "\n";
+    //std::cout << "(" << materials[i].mr_path << "\n";
   } 
 }
 
@@ -155,22 +169,57 @@ void Scene::gen_buffers(DriverState &ds) {
 }
 
 void Scene::gen_shadows(DriverState &ds) {
+  vk::Sampler sampler;
+
+  {
+    vk::SamplerCreateInfo info {};
+    info.setMagFilter(vk::Filter::eLinear);
+    info.setMinFilter(vk::Filter::eLinear);
+    info.setMipmapMode(vk::SamplerMipmapMode::eNearest);
+
+    sampler = ds.ctx.get_device().createSampler(info);
+  }
+
   CubemapShadowRenderer renderer {};
   renderer.init(ds);
   const auto flags = vk::ImageUsageFlagBits::eTransferDst|vk::ImageUsageFlagBits::eSampled;
+  
+  auto cubemap = ds.storage.create_cubemap(ds.ctx, 256, 256, vk::Format::eR32Sfloat, flags);
+  auto view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
+
+  auto oct_shadows_img = ds.storage.create_image2D_array(ds.ctx, 1024, 1024, vk::Format::eR32Sfloat, vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eColorAttachment, scene_lights.size());
+  oct_shadows_array = ds.storage.create_2Darray_view(ds.ctx, oct_shadows_img, vk::ImageAspectFlagBits::eColor);
+
+
+  ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
+  ds.pipelines.load_shader(ds.ctx, "cube_shadow_to_oct_fs", "src/shaders/cube_shadow_to_oct_frag.spv", vk::ShaderStageFlagBits::eFragment);
+
+  PostProcessingPass<Nil, Nil> cubemap_to_oct{};
+  cubemap_to_oct.init_attachment(vk::Format::eR32Sfloat);
+  cubemap_to_oct.init(ds, 1, "cube_shadow_to_oct_fs");
+
   for (u32 i = 0; i < scene_lights.size(); i++) {
-    auto cubemap = ds.storage.create_cubemap(ds.ctx, 256, 256, vk::Format::eR32Sfloat, flags);
+    auto layer_view = ds.storage.create_2Dlayer_view(ds.ctx, oct_shadows_img, vk::ImageAspectFlagBits::eColor, i);
+
     renderer.render(ds, cubemap, *this, scene_lights[i].position);
-    auto view = ds.storage.create_cubemap_view(ds.ctx, cubemap, vk::ImageAspectFlagBits::eColor);
-    scene_lights[i].shadow = view;
+    scene_lights[i].shadow_layer = i;
+
+    cubemap_to_oct.set_attachment(0, layer_view);
+    cubemap_to_oct.set_image_sampler(0, view, sampler);
+    cubemap_to_oct.set_render_area(1024, 1024);
+    cubemap_to_oct.render_and_wait(ds);
   }
+
+  cubemap_to_oct.release(ds);
   renderer.release(ds);
+
+  ds.ctx.get_device().destroySampler(sampler);
 }
 
 
 void Scene::gen_textures(DriverState &ds) {
   const u32 mat_count = materials.size();
-  tex_materials.reserve(mat_count);
+  scene_textures.materials.reserve(mat_count);
 
   vk::ImageSubresourceRange i_range {};
   i_range
@@ -181,14 +230,24 @@ void Scene::gen_textures(DriverState &ds) {
     .setLevelCount(~0u);
   
   for (u32 i = 0; i < mat_count; i++) {
-    SceneMaterial mat {};
+    SceneMaterial mat {.albedo_tex_id = -1, .mr_tex_id = -1};
+
     const auto &desc = materials[i];
     if (!desc.albedo_path.empty()) {
       auto img = ds.storage.load_image2D(ds.ctx, desc.albedo_path.c_str());
       auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
-      mat.albedo_tex = view;
-      ds.storage.collect_buffers();
+      mat.albedo_tex_id = scene_textures.albedo_images.size();
+      scene_textures.albedo_images.push_back(view);
     }
-    tex_materials.push_back(mat);
+
+    if (!desc.mr_path.empty()) {
+      auto img = ds.storage.load_image2D(ds.ctx, desc.mr_path.c_str());
+      auto view = ds.storage.create_image_view(ds.ctx, img, vk::ImageViewType::e2D, i_range);
+      mat.mr_tex_id = scene_textures.mr_images.size();
+      scene_textures.mr_images.push_back(view);
+    }
+
+    ds.storage.collect_buffers();
+    scene_textures.materials.push_back(mat);
   }
 }

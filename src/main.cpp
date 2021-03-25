@@ -15,7 +15,7 @@
 int main() {
   SDL_Init(SDL_INIT_EVERYTHING);
 
-  auto window = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_VULKAN);
+  auto window = SDL_CreateWindow("", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_VULKAN);
   
   Renderer renderer{};
   renderer.init(window);

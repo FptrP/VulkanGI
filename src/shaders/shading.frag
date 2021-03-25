@@ -4,6 +4,8 @@
 #include "include/oct_coord.glsl"
 #include "include/raytracing.glsl"
 #include "include/trace_probe.glsl"
+#include "include/shadows.glsl"
+#include "include/brdf.glsl"
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
@@ -13,8 +15,15 @@ layout (set = 0, binding = 1) uniform sampler2D normal_tex;
 layout (set = 0, binding = 2) uniform sampler2D worldpos_tex;
 layout (set = 0, binding = 3) uniform sampler2D depth_tex;
 
-layout(set = 0, binding = 4) uniform samplerCube shadow_cube;
+layout(set = 0, binding = 4) uniform sampler2DArray oct_shadows;
 
+#define MAX_LIGHTS 4
+
+layout(set = 0, binding = 5) uniform LightSourceInfo {
+  vec4 lights_count;
+  vec4 position[MAX_LIGHTS];
+  vec4 radiance[MAX_LIGHTS];
+} lights;
 
 layout (push_constant) uniform PushData {
   vec3 camera_origin;
@@ -24,7 +33,14 @@ void main() {
   vec3 world_dir = texture(worldpos_tex, uv).xyz;
   vec3 world_pos = world_dir + pc.camera_origin;
   vec3 norm = texture(normal_tex, uv).xyz;
-  
+  vec3 albedo = texture(albedo_tex, uv).rgb;
+
+  //albedo = pow(albedo, vec3(2.2));
+  //albedo = albedo/(1 - albedo);
+
+  float metalic = texture(normal_tex, uv).w;
+  float roughness = texture(worldpos_tex, uv).w;
+
   vec3 reflection_ray = normalize(reflect(world_dir, norm));
   
   vec3 ray_hit;
@@ -39,14 +55,53 @@ void main() {
 
   vec4 signalColor = vec4(0, 0, 0, 0);
 
-  vec2 out_texc;
-  int hit = -1;
-  float trace_dist = 5.f;
-  int result = trace(start, reflection_ray, trace_dist, out_texc, hit); 
+  float shadow = 0.f;
+  float lights_count = min(lights.lights_count.x, MAX_LIGHTS);
 
-  if (result == TRACE_RESULT_HIT) {
-    signalColor = texture(probe_radiance, vec3(out_texc, hit));
+  vec3 irradiance = vec3(0);
+
+  for (float i = 0; i < lights_count; i += 1.f) {
+    vec3 light_dir = lights.position[int(i)].xyz - world_pos;
+
+    irradiance += calc_color(
+      pc.camera_origin, 
+      world_pos, norm, 
+      albedo, 
+      lights.position[int(i)].xyz,
+      lights.radiance[int(i)].xyz,
+      metalic,
+      roughness);
+    
+    shadow += pcf_octmap(oct_shadows, i, -light_dir, length(light_dir));
   }
-  
-  outColor = 0.5 * texture(albedo_tex, uv) + 0.5 * signalColor;
+
+  shadow /= lights_count;
+
+  if (shadow > 0.0001f) {
+    vec2 out_texc;
+    int hit = -1;
+    float trace_dist = 5.f;
+    int result = trace(start, reflection_ray, trace_dist, out_texc, hit); 
+
+    if (result == TRACE_RESULT_HIT) {
+      vec3 reflection = texture(probe_radiance, vec3(out_texc, hit)).rgb;
+      vec3 hitpos = world_pos + reflection_ray * trace_dist;
+      
+      vec3 ref_irr = calc_color(
+        pc.camera_origin, 
+        world_pos, norm, 
+        albedo, 
+        hitpos,
+        reflection/(PI * PI),
+        metalic,
+        roughness);
+      //vec3 ref_irr = max(metalic, 0) * albedo * reflection / (PI * PI);
+      irradiance += ref_irr;
+    }
+  }
+
+  //irradiance /= (irradiance + vec3(1));
+  //irradiance = pow(irradiance, vec3(1.0/2.2));
+  outColor = shadow * vec4(irradiance, 0.f);
+  //outColor = vec4(metalic, roughness, 0.f, 0.f);
 }

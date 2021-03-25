@@ -2,16 +2,23 @@
 
 void GBufferSubpass::create_texture_sets(DriverState &ds) {
   std::vector<vk::ImageView> api_views;
-  for (auto &mat : frame_data.get_scene().get_materials()) {
-    if (mat.albedo_tex.is_nullptr()) continue;
+  std::vector<vk::ImageView> api_materials;
 
-    api_views.push_back(mat.albedo_tex->api_view());
+  auto &tex_info = frame_data.get_scene().get_materials();
+
+  for (auto &view : tex_info.albedo_images) {
+    api_views.push_back(view->api_view());
+  }
+
+  for (auto &view : tex_info.mr_images) {
+    api_materials.push_back(view->api_view());
   }
 
   drv::DescriptorSetLayoutBuilder builder {};
   builder
     .add_sampler(0, vk::ShaderStageFlagBits::eFragment)
-    .add_array_of_tex(1, api_views.size(), vk::ShaderStageFlagBits::eFragment);
+    .add_array_of_tex(1, api_views.size(), vk::ShaderStageFlagBits::eFragment)
+    .add_array_of_tex(2, api_materials.size(), vk::ShaderStageFlagBits::eFragment);
     
   tex_layout = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
   texture_set = ds.descriptors.allocate_set(ds.ctx, tex_layout);
@@ -19,7 +26,8 @@ void GBufferSubpass::create_texture_sets(DriverState &ds) {
   drv::DescriptorBinder img_bind {ds.descriptors.get(texture_set)};
   img_bind
     .bind_sampler(0, sampler)
-    .bind_array_of_img(1, api_views.size(), api_views.data());
+    .bind_array_of_img(1, api_views.size(), api_views.data())
+    .bind_array_of_img(2, api_materials.size(), api_materials.data());
       
   img_bind.write(ds.ctx);   
 }
@@ -184,7 +192,7 @@ void GBufferSubpass::create_pipeline_layout(DriverState &ds) {
   pconst
     .setStageFlags(vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment)
     .setOffset(0)
-    .setSize(2 * sizeof(u32));
+    .setSize(3 * sizeof(i32));
 
 
   auto pconstants = {pconst};
@@ -253,11 +261,16 @@ void GBufferSubpass::render(drv::DrawContext &draw_ctx, DriverState &ds) {
   draw_ctx.dcb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, bind_sets, {});
 
   const auto& objects = frame_data.get_scene().get_objects(); 
-  auto &materials = frame_data.get_scene().get_material_desc();
+  auto &tex_info = frame_data.get_scene().get_materials();
+
+
   for (auto &obj : objects) {
-    if (materials[obj.material_index].albedo_path.empty()) continue;
-    u32 indexes[2] {obj.matrix_index, obj.material_index};
-    draw_ctx.dcb.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment, 0u, 2*sizeof(u32), indexes);
+    auto albedo_id = tex_info.materials[obj.material_index].albedo_tex_id;
+    auto mr_id = tex_info.materials[obj.material_index].mr_tex_id;
+    if (albedo_id < 0) continue;
+
+    i32 indexes[3] {obj.matrix_index, albedo_id, mr_id};
+    draw_ctx.dcb.pushConstants(pipeline_layout, vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment, 0u, 3*sizeof(i32), indexes);
     draw_ctx.dcb.drawIndexed(obj.index_count, 1, obj.index_offset, obj.vertex_offset, 0);
   }
 

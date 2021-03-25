@@ -21,8 +21,9 @@ layout (set = 0, binding = 1) readonly buffer Matrices {
 };
 
 layout (push_constant) uniform PushData {
-  uint mat_id;
-  uint tex_id;
+  int mat_id;
+  int tex_id;
+  int mr_id;
 };
 
 void main() {
