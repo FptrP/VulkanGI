@@ -32,6 +32,8 @@ private:
   void create_framebuffers(std::vector<vk::Framebuffer> &fb);
 
   DriverState ds;
+  drv::ImguiContext imgui_ctx;
+
 
   SDL_Window *window = nullptr;
 

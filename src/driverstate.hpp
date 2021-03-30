@@ -6,6 +6,7 @@
 #include "drv/pipeline.hpp"
 #include "drv/resources.hpp"
 #include "drv/draw_context.hpp"
+#include "drv/imgui_context.hpp"
 
 #include "camera.hpp"
 

@@ -9,6 +9,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "drv/imgui_context.hpp"
+
 const u32 MAX_PROBES = 256;
 const u32 MAX_LIGHTS = 4;
 
@@ -155,6 +157,23 @@ struct ShadingPass {
   }
 
   void render(drv::DrawContext &draw_ctx, DriverState &ds) {
+     {
+      static float f = 0.0f;
+      static int counter = 0;
+
+      ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+      ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+
+      if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+        counter++;
+      ImGui::SameLine();
+      ImGui::Text("counter = %d", counter);
+
+      ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+      ImGui::End();
+    }
+
 
     auto pos = frame_data.get_camera_pos();
 

@@ -41,6 +41,19 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
     return ggx1 * ggx2;
 } 
 
+vec3 calcFresnel(in vec3 eye_pos, in vec3 hit_pos, in vec3 hit_normal, in vec3 light_pos, in vec3 albedo, in float metallness, in float roughness) {
+  vec3 V = normalize(eye_pos - hit_pos);
+  vec3 N = normalize(hit_normal);
+  
+  vec3 F0 = vec3(0.04);
+  F0 = mix(F0, albedo, metallness);
+
+  vec3 L = normalize(light_pos - hit_pos);
+  vec3 H = normalize(V + L);
+
+  return fresnelSchlick(max(dot(H, V), 0.0), F0);
+}
+
 vec3 calc_color(in vec3 eye_pos, in vec3 pos, in vec3 normal, in vec3 albedo, in vec3 light_pos, in vec3 light_color, float metallic, float roughness) {
 
   vec3 V = normalize(eye_pos - pos);
@@ -87,14 +100,7 @@ vec3 calc_lambertian(in vec3 eye_pos, in vec3 pos, in vec3 normal, in vec3 albed
 
   vec3 F0 = vec3(0.04); 
   F0 = mix(F0, albedo, metallic);
-  vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0); 
-
-  float NDF = DistributionGGX(N, H, roughness);       
-  float G   = GeometrySmith(N, V, L, roughness);        
-
-  vec3 numerator    = NDF * G * F;
-  float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-  vec3 specular     = numerator / denominator;  
+  vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);  
 
   vec3 kS = F;
   vec3 kD = vec3(1.0) - kS;
@@ -103,7 +109,7 @@ vec3 calc_lambertian(in vec3 eye_pos, in vec3 pos, in vec3 normal, in vec3 albed
   
   float NdotL = max(dot(N, L), 0.0);        
   
-  return (kD * albedo / PI + specular) * radiance * NdotL;
+  return (kD*albedo/PI) * radiance * NdotL;
 }
 
 #endif

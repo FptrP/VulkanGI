@@ -42,6 +42,8 @@ namespace drv {
     const u32 queue_family_count() const { return queue_family_indexes.size(); }
     
     vk::Queue &get_queue(QueueT qtype) { return queues[(u32)qtype]; }
+    
+    SDL_Window *get_window() { return window; }
 
     Context(Context&) = delete;
     const Context& operator=(const Context&) = delete;

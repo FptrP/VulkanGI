@@ -53,7 +53,8 @@ void CubemapShadowRenderer::create_pipeline_layout(DriverState &ds) {
     .add_storage_buffer(1, vk::ShaderStageFlagBits::eVertex);
   
   shader_input = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
-
+  shader_res = ds.descriptors.allocate_set(ds.ctx, shader_input);
+  
   auto layouts = {ds.descriptors.get(shader_input)};
 
   vk::PushConstantRange pc {};
@@ -114,8 +115,6 @@ void CubemapShadowRenderer::release(DriverState &ds) {
 }
 
 void CubemapShadowRenderer::set_shader_input(DriverState &ds, const Scene &scene) {
-  shader_res = ds.descriptors.allocate_set(ds.ctx, shader_input);
-
   drv::DescriptorBinder bind {ds.descriptors.get(shader_res)};
   bind
     .bind_ubo(0, ubo->api_buffer())

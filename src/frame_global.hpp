@@ -14,6 +14,7 @@ struct FrameGlobal {
     scene.gen_buffers(ds);
 
     scene.add_light({0.f, 4.f, 0.f}, {10.f, 10.f, 10.f});
+    scene.add_light({5.09163, 1.28635, -0.324504}, {0.f, 2.f, 0.f});
     scene.gen_shadows(ds);
 
     scene.gen_textures(ds);

@@ -8,7 +8,9 @@ void Renderer::init(SDL_Window *w) {
 
   ds.main_renderpass = create_main_renderpass();
   ds.submit_pool.init(ds.ctx, ds.main_renderpass);
-  
+  imgui_ctx.init(ds.ctx, ds.main_renderpass, 0);
+  imgui_ctx.create_fonts(ds.ctx, ds.submit_pool);
+
   ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
   ds.pipelines.load_shader(ds.ctx, "shading_fs", "src/shaders/shading_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
@@ -22,6 +24,7 @@ void Renderer::init(SDL_Window *w) {
 }
 
 void Renderer::release() {
+  imgui_ctx.release(ds.ctx);
   shading_subpass->release(ds);
   delete shading_subpass;
 
@@ -119,11 +122,12 @@ void Renderer::handle_event(const SDL_Event &event) {
   if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_r) {
     events_msk.store((u32)RenderEvents::ReloadShaders, std::memory_order_relaxed);
   }
-
+  imgui_ctx.process_event(event);
   frame_data->handle_events(event);
 }
 
 void Renderer::render(drv::DrawContext &dctx) {
+  imgui_ctx.new_frame();
   gbuffer_subpass->render(dctx, ds);
   
   vk::ClearValue color {};
@@ -140,7 +144,7 @@ void Renderer::render(drv::DrawContext &dctx) {
   dctx.dcb.beginRenderPass(info, vk::SubpassContents::eInline);
 
   shading_subpass->render(dctx, ds);
-  
+  imgui_ctx.render(dctx.dcb);
   dctx.dcb.endRenderPass();
   dctx.dcb.end();
 }

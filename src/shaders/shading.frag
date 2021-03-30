@@ -87,21 +87,10 @@ void main() {
       vec3 reflection = texture(probe_radiance, vec3(out_texc, hit)).rgb;
       vec3 hitpos = world_pos + reflection_ray * trace_dist;
       
-      vec3 ref_irr = calc_color(
-        pc.camera_origin, 
-        world_pos, norm, 
-        albedo, 
-        hitpos,
-        reflection/(PI * PI),
-        metalic,
-        roughness);
-      //vec3 ref_irr = max(metalic, 0) * albedo * reflection / (PI * PI);
-      irradiance += ref_irr;
+      vec3 F = calcFresnel(pc.camera_origin, world_pos, norm, hitpos, albedo, metalic, roughness);
+      irradiance += F * reflection/PI;
     }
   }
 
-  //irradiance /= (irradiance + vec3(1));
-  //irradiance = pow(irradiance, vec3(1.0/2.2));
   outColor = shadow * vec4(irradiance, 0.f);
-  //outColor = vec4(metalic, roughness, 0.f, 0.f);
 }
