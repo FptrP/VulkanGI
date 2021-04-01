@@ -1,4 +1,6 @@
 
+#include "oct_coord.glsl"
+
 
 float pcf_cubemap(in samplerCube shadow_tex, vec3 dir, float dist) {
   float s  = 0.0;

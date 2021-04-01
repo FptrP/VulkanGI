@@ -120,7 +120,9 @@ void LightField::create_pipeline_layout(DriverState &ds) {
     .add_ubo(0, vk::ShaderStageFlagBits::eVertex)
     .add_storage_buffer(1, vk::ShaderStageFlagBits::eVertex)
     .add_array_of_tex(2, 25, vk::ShaderStageFlagBits::eFragment)
-    .add_sampler(3, vk::ShaderStageFlagBits::eFragment);
+    .add_sampler(3, vk::ShaderStageFlagBits::eFragment)
+    .add_ubo(4, vk::ShaderStageFlagBits::eFragment)
+    .add_combined_sampler(5, vk::ShaderStageFlagBits::eFragment);
   
   resource_desc = ds.descriptors.create_layout(ds.ctx, builder.build(), 1);
   resource_set = ds.descriptors.allocate_set(ds.ctx, resource_desc);
@@ -141,6 +143,7 @@ void LightField::create_pipeline_layout(DriverState &ds) {
   pipeline_layout = ds.ctx.get_device().createPipelineLayout(info);
 
   ubo = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(UBOData), vk::BufferUsageFlagBits::eUniformBuffer);
+  lights_ubo = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(LightSourceData), vk::BufferUsageFlagBits::eUniformBuffer);
 }
 
 void LightField::create_pipeline(DriverState &ds) {
@@ -216,6 +219,19 @@ void LightField::render_cubemaps(DriverState &ds, Scene &scene, glm::vec3 center
     data.camera_origin = glm::vec4{center.x, center.y, center.z, 0.f};
     calc_matrix(side, vk::Extent2D{CUBEMAP_RES, CUBEMAP_RES}, center, data.camera_proj);
     ds.storage.buffer_memcpy(ds.ctx, ubo, 0, &data, sizeof(data));
+
+    {
+      LightSourceData data;
+      data.lights_count.x = scene.get_lights().size();
+      const auto &scene_lights = scene.get_lights();
+
+      for (u32 i = 0; i < min(MAX_LIGHTS, u32(scene_lights.size())); i++) {
+        data.position[i] = glm::vec4{scene_lights[i].position, 0.f};
+        data.radiance[i] = glm::vec4{scene_lights[i].color, 0.f};
+      }
+
+      ds.storage.buffer_memcpy(ds.ctx, lights_ubo, 0, &data, sizeof(data));
+    }
 
     auto cmd = ds.submit_pool.start_cmd(ds.ctx);
     
@@ -303,7 +319,9 @@ void LightField::bind_resources(DriverState &ds, Scene &scene) {
     .bind_ubo(0, ubo->api_buffer())
     .bind_storage_buff(1, scene.get_matrix_buff()->api_buffer())
     .bind_array_of_img(2, api_views.size(), api_views.data())
-    .bind_sampler(3, sampler);
+    .bind_sampler(3, sampler)
+    .bind_ubo(4, lights_ubo->api_buffer())
+    .bind_combined_img(5, scene.get_shadows_array()->api_view(), sampler);
   
   bind.write(ds.ctx);
 }

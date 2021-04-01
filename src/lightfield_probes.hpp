@@ -60,7 +60,7 @@ private:
   drv::DescriptorSetLayoutID resource_desc;
   drv::DescriptorSetID resource_set;
 
-  drv::BufferID ubo;
+  drv::BufferID ubo, lights_ubo;
 
   //render to probe resources
   PostProcessingPass<Nil, Nil> lightprobe_pass;
@@ -76,6 +76,14 @@ private:
   glm::vec3 probe_start, probe_step;
   drv::ImageViewID dist_array, norm_array, low_res_array, radiance_array;
   std::vector<LightFieldProbe> probes;
+
+  static constexpr u32 MAX_LIGHTS = 4;
+
+  struct LightSourceData {
+    glm::vec4 lights_count;
+    glm::vec4 position[MAX_LIGHTS];
+    glm::vec4 radiance[MAX_LIGHTS];
+  };
 };
 
 

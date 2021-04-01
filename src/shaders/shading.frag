@@ -88,7 +88,7 @@ void main() {
       vec3 hitpos = world_pos + reflection_ray * trace_dist;
       
       vec3 F = calcFresnel(pc.camera_origin, world_pos, norm, hitpos, albedo, metalic, roughness);
-      irradiance += F * reflection/PI;
+      irradiance += F * reflection;
     }
   }
 

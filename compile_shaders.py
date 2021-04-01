@@ -16,7 +16,7 @@ def compile_all():
     out_name = name +  "_" + ext[1:] + SPV_EXT
     out_name = join(DIR, out_name)
     print("Compile {}{} -o {}".format(join(DIR, name), ext, out_name))
-    system("glslc {}{} -o {}".format(join(DIR, name), ext, out_name))
+    system("glslc {}{} -o {} -O".format(join(DIR, name), ext, out_name))
 
 def clean():
   files = [f for f in listdir(DIR) if isfile(join(DIR, f))]
