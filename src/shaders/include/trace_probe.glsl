@@ -31,6 +31,9 @@ uniform sampler2DArray probe_low_res;
 layout(set = LIGHTFIELD_SET, binding = 4)
 uniform sampler2DArray probe_radiance;
 
+layout(set = LIGHTFIELD_SET, binding = 5)
+uniform sampler2DArray probe_irradiance;
+
 #define TRACE_RESULT_MISS    0
 #define TRACE_RESULT_HIT     1
 #define TRACE_RESULT_UNKNOWN 2
@@ -80,6 +83,10 @@ vec3 nearest_probe(vec3 p) {
 int next_index(vec3 p, int i) {
   vec3 max_coord = vec3(lightfield.probe_count.xyz) - vec3(1, 1, 1);
   return grid_to_index(clamp(p + vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1), vec3(0), max_coord));
+}
+
+vec3 calc_probe_pos(vec3 probe) {
+  return lightfield.probe_start.xyz + probe * lightfield.probe_step.xyz;
 }
 
 vec3 get_probe_position(uint index) {
@@ -403,6 +410,58 @@ int trace(
 
   return result;
 }
+
+
+vec3 computePrefilteredIrradiance(vec3 wsPosition, vec3 wsN) {
+	vec3 baseProbe = nearest_probe(wsPosition);
+	vec3 baseProbePos = calc_probe_pos(baseProbe);
+	
+  vec3 sumIrradiance = vec3(0.0);
+	float sumWeight = 0.0;
+	// Trilinear interpolation values along axes
+	vec3 alpha = clamp((wsPosition - baseProbePos) / lightfield.probe_step.xyz, vec3(0), vec3(1));
+
+	// Iterate over the adjacent probes defining the surrounding vertex "cage"
+	for (int i = 0; i < 8; ++i) {
+		// Compute the offset grid coord and clamp to the probe grid boundary
+		vec3 offset = vec3(ivec3(i, i >> 1, i >> 2) & ivec3(1));
+		vec3 probeGridCoord = clamp(baseProbe + offset, vec3(0), lightfield.probe_count.xyz - vec3(1));
+		int p = next_index(baseProbe, i);
+
+		// Compute the trilinear weights based on the grid cell vertex to smoothly
+		// transition between probes. Avoid ever going entirely to zero because that
+		// will cause problems at the border probes.
+		vec3 trilinear = mix(1.0 - alpha, alpha, offset);
+		float weight = trilinear.x * trilinear.y * trilinear.z;
+
+		// Make cosine falloff in tangent plane with respect to the angle from the surface to the probe so that we never
+		// test a probe that is *behind* the surface.
+		// It doesn't have to be cosine, but that is efficient to compute and we must clip to the tangent plane.
+		vec3 probePos = calc_probe_pos(probeGridCoord);
+		vec3 probeToPoint = wsPosition - probePos;
+		vec3 dir = normalize(-probeToPoint);
+
+		// Smooth back-face test
+		weight *= max(0.05, dot(dir, wsN));
+		// Avoid zero weight
+		weight = max(0.0002, weight);
+
+		sumWeight += weight;
+
+		vec3 irradianceDir = normalize(wsN);
+		vec2 octUV = oct_encode(irradianceDir);
+
+		vec3 probeIrradiance = texture(probe_irradiance, vec3(octUV, p)).rgb;
+
+		// Debug probe contribution by visualizing as colors
+		// probeIrradiance = 0.5 * probeIndexToColor(lightFieldSurface, p);
+
+		sumIrradiance += weight * probeIrradiance;
+	}
+
+	return 2.0 * PI * sumIrradiance / sumWeight;
+}
+
 
 bool draw_probes(vec3 camera, vec3 world_pos) {
   float pixel_dist = length(world_pos - camera);

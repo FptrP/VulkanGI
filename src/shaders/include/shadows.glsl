@@ -40,8 +40,8 @@ float pcf_octmap(in sampler2D shadow_tex, vec3 dir, float dist) {
 
 float pcf_octmap(in sampler2DArray shadow_tex, float layer, vec3 dir, float dist) {
   const float bias = 0.05; 
-  const float samples = 1.0;
-  const float offset  = 0.005;
+  const float samples = 2.0;
+  const float offset  = 0.01;
 
   float s = 0.f;
 

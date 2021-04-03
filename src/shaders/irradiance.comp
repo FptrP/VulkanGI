@@ -1,0 +1,50 @@
+#version 450 core
+
+#include "include/oct_coord.glsl"
+
+#define MAX_SAMPLES 1024
+
+layout (set = 0, binding = 0) 
+uniform sampler2DArray textures;
+
+layout (set = 0, binding = 1)
+uniform Data {
+  vec4 samples[MAX_SAMPLES]; 
+};
+
+layout (set = 0, binding = 2, rgba16f)
+uniform writeonly image2DArray irradiance_tex;
+
+layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+const vec2 TEX_SIZE = vec2(64, 64);
+const vec2 INV_TEX_SIZE = 1.f/TEX_SIZE;
+const float LOBE_SIZE = 0.5f; 
+
+void main() {
+  vec3 texel_coord = vec3(gl_GlobalInvocationID); 
+  vec2 uv = texel_coord.xy * INV_TEX_SIZE;
+  vec3 oct_direction = oct_decode(uv);
+
+  vec3 irradiance = vec3(0);
+  float hemisphere_samples = 0.f;
+  for (int i = 0; i < MAX_SAMPLES; i++) {
+    vec3 sphere_dir = samples[i].xyz;
+    vec3 sample_dir = normalize(oct_direction + LOBE_SIZE * sphere_dir);
+
+    vec2 sample_uv = oct_encode(sample_dir);
+
+    vec3 color = texture(textures, vec3(sample_uv, texel_coord.z)).rgb;
+
+    if (dot(sample_dir, oct_direction) > 0.f) {
+      irradiance += color;
+      hemisphere_samples += 1.f;
+    }
+  }
+  
+  irradiance /= MAX_SAMPLES;
+
+  imageStore(irradiance_tex, ivec3(texel_coord), vec4(irradiance, 0.f));
+
+}
+

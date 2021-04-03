@@ -3,9 +3,9 @@
 
 #include "include/oct_coord.glsl"
 #include "include/raytracing.glsl"
+#include "include/brdf.glsl"
 #include "include/trace_probe.glsl"
 #include "include/shadows.glsl"
-#include "include/brdf.glsl"
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
@@ -92,5 +92,5 @@ void main() {
     }
   }
 
-  outColor = shadow * vec4(irradiance, 0.f);
+  outColor = shadow * vec4(irradiance, 0.f) + 0.1 * vec4(albedo * computePrefilteredIrradiance(world_pos, norm), 0.f);
 }

@@ -25,7 +25,8 @@ struct LightField {
   drv::ImageViewID &get_normal_array() { return norm_array; }
   drv::ImageViewID &get_lowres_array() { return low_res_array; }
   drv::ImageViewID &get_radiance_array() { return radiance_array; }
-  
+  drv::ImageViewID &get_irradiance_array() { return irradiance_pass.image_view; }
+
 private:
   void create_renderpass(DriverState &ds);
   void create_framebuffer(DriverState &ds);
@@ -41,7 +42,8 @@ private:
   
   void init_compute_resources(DriverState &ds);
   void downsample_distances(DriverState &ds);
-
+  void compute_irradiance(DriverState &ds);
+  
   struct UBOData {
     glm::mat4 camera_proj;
     glm::vec4 camera_origin;
@@ -76,6 +78,22 @@ private:
   glm::vec3 probe_start, probe_step;
   drv::ImageViewID dist_array, norm_array, low_res_array, radiance_array;
   std::vector<LightFieldProbe> probes;
+  
+  struct {
+    drv::ComputePipelineID pipeline;
+    drv::DescriptorSetLayoutID descriptor_layout;
+    vk::PipelineLayout pipeline_layout;
+    drv::DescriptorSetID descriptor;
+    
+    drv::ImageViewID image_view;
+    drv::BufferID samples_buffer;
+  } irradiance_pass;
+
+  static constexpr u32 SAMPLES_COUNT = 1024;
+
+  struct IrradianceSamples {
+    glm::vec4 positions[SAMPLES_COUNT];
+  };
 
   static constexpr u32 MAX_LIGHTS = 4;
 

@@ -75,7 +75,8 @@ struct ShadingPass {
       .add_combined_sampler(1, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(2, vk::ShaderStageFlagBits::eFragment)
       .add_combined_sampler(3, vk::ShaderStageFlagBits::eFragment)
-      .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment); //radiance array
+      .add_combined_sampler(4, vk::ShaderStageFlagBits::eFragment) //radiance array
+      .add_combined_sampler(5, vk::ShaderStageFlagBits::eFragment); //irradiance array
     
     light_field_layout = ds.descriptors.create_layout(ds.ctx, lf.build(), 1);
     auto lf_set = ds.descriptors.allocate_set(ds.ctx, light_field_layout);
@@ -103,6 +104,7 @@ struct ShadingPass {
       .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), nearest_sampler)
       .bind_combined_img(3, frame_data.get_light_field().get_lowres_array()->api_view(), nearest_sampler)
       .bind_combined_img(4, frame_data.get_light_field().get_radiance_array()->api_view(), frame_data.get_gbuffer().sampler)
+      .bind_combined_img(5, frame_data.get_light_field().get_irradiance_array()->api_view(), frame_data.get_gbuffer().sampler)
       .write(ds.ctx);
 
     sets.push_back(lf_set);

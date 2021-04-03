@@ -2,6 +2,9 @@
 #include "drv/cmd_utils.hpp"
 #include <iostream>
 
+#include <cstdlib>
+#include <cmath>
+
 const u32 CUBEMAP_RES = 512;
 const vk::Extent2D CUBEMAP_EXT {CUBEMAP_RES, CUBEMAP_RES};
 const u32 OCT_RES = 1024;
@@ -379,6 +382,7 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
   }
 
   downsample_distances(ds);
+  compute_irradiance(ds);
 }
 
 void LightField::transform_cubemap_layout(vk::CommandBuffer &buf, vk::ImageLayout src, vk::ImageLayout dst) {
@@ -438,23 +442,61 @@ void LightField::blit_cubemaps(vk::CommandBuffer &buf, u32 side) {
 
 void LightField::init_compute_resources(DriverState &ds) {
   ds.pipelines.load_shader(ds.ctx, "oct_fold_cs", "src/shaders/oct_fold_comp.spv", vk::ShaderStageFlagBits::eCompute);
-  
-  drv::DescriptorSetLayoutBuilder layout_builder {};
-  layout_builder
-    .add_combined_sampler(0, vk::ShaderStageFlagBits::eCompute)
-    .add_storage_image(1, vk::ShaderStageFlagBits::eCompute);
+  ds.pipelines.load_shader(ds.ctx, "irradiance_cs", "src/shaders/irradiance_comp.spv", vk::ShaderStageFlagBits::eCompute);
+  {
+    drv::DescriptorSetLayoutBuilder layout_builder {};
+    layout_builder
+      .add_combined_sampler(0, vk::ShaderStageFlagBits::eCompute)
+      .add_storage_image(1, vk::ShaderStageFlagBits::eCompute);
 
-  low_res_desc_layout = ds.descriptors.create_layout(ds.ctx, layout_builder.build(), 1);
+    low_res_desc_layout = ds.descriptors.create_layout(ds.ctx, layout_builder.build(), 1);
 
-  auto layouts = {ds.descriptors.get(low_res_desc_layout)};
+    auto layouts = {ds.descriptors.get(low_res_desc_layout)};
 
-  vk::PipelineLayoutCreateInfo layout_info {};
-  layout_info.setSetLayouts(layouts);
+    vk::PipelineLayoutCreateInfo layout_info {};
+    layout_info.setSetLayouts(layouts);
 
-  low_res_pipeline_layout = ds.ctx.get_device().createPipelineLayout(layout_info);
-  low_res_pipeline = ds.pipelines.create_compute_pipeline(ds.ctx, "oct_fold_cs", low_res_pipeline_layout);
+    low_res_pipeline_layout = ds.ctx.get_device().createPipelineLayout(layout_info);
+    low_res_pipeline = ds.pipelines.create_compute_pipeline(ds.ctx, "oct_fold_cs", low_res_pipeline_layout);
 
-  low_res_bindings = ds.descriptors.allocate_set(ds.ctx, low_res_desc_layout);
+    low_res_bindings = ds.descriptors.allocate_set(ds.ctx, low_res_desc_layout);
+  }
+
+  {
+    drv::DescriptorSetLayoutBuilder playout_builder{};
+    playout_builder
+      .add_combined_sampler(0, vk::ShaderStageFlagBits::eCompute)
+      .add_ubo(1, vk::ShaderStageFlagBits::eCompute)
+      .add_storage_image(2, vk::ShaderStageFlagBits::eCompute);
+
+    irradiance_pass.descriptor_layout = ds.descriptors.create_layout(ds.ctx, playout_builder.build(), 1);
+
+    auto layouts = {ds.descriptors.get(irradiance_pass.descriptor_layout)};
+
+    vk::PipelineLayoutCreateInfo layout_info {};
+    layout_info.setSetLayouts(layouts);
+
+    irradiance_pass.pipeline_layout = ds.ctx.get_device().createPipelineLayout(layout_info);
+    irradiance_pass.pipeline = ds.pipelines.create_compute_pipeline(ds.ctx, "irradiance_cs", irradiance_pass.pipeline_layout);
+
+    irradiance_pass.descriptor = ds.descriptors.allocate_set(ds.ctx, irradiance_pass.descriptor_layout);
+    irradiance_pass.samples_buffer 
+      = ds.storage.create_buffer(ds.ctx, drv::GPUMemoryT::Coherent, sizeof(IrradianceSamples), vk::BufferUsageFlagBits::eUniformBuffer);
+
+    IrradianceSamples *ptr = (IrradianceSamples*)ds.storage.map_buffer(ds.ctx, irradiance_pass.samples_buffer);
+
+    for (u32 i = 0; i < SAMPLES_COUNT; i++) {
+      float x = 2.f * std::rand()/float(RAND_MAX) - 1.f;
+      float y = 2.f * std::rand()/float(RAND_MAX) - 1.f;
+      float z = 2.f * std::rand()/float(RAND_MAX) - 1.f;
+
+      float dist = std::max(std::sqrt(x*x + y*y+ z*z), 1e-6f);
+      ptr->positions[i].x = x/dist;
+      ptr->positions[i].y = y/dist;
+      ptr->positions[i].z = z/dist;
+    }
+    ds.storage.unmap_buffer(ds.ctx, irradiance_pass.samples_buffer);
+  }
 }
 
 void LightField::downsample_distances(DriverState &ds) {
@@ -486,6 +528,47 @@ void LightField::downsample_distances(DriverState &ds) {
   cmd.dispatch(4, 4, layers);
 
   drv::ImageBarrier to_sampled{low_res_img, vk::ImageAspectFlagBits::eColor};
+  to_sampled.set_range(0, 1, 0, layers);
+  to_sampled.change_layout(vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal);
+  to_sampled.access_msk(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
+  to_sampled.write(cmd, vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eBottomOfPipe);
+
+
+  cmd.end();
+  auto fence = ds.submit_pool.submit_cmd(ds.ctx, cmd);
+  ds.ctx.get_device().waitForFences({fence}, VK_TRUE, ~(0ul));
+  ds.ctx.get_device().destroyFence(fence);
+}
+
+void LightField::compute_irradiance(DriverState &ds) {
+  auto layers = dim.x * dim.y * dim.z;
+  auto irradiance_img = ds.storage.create_image2D_array(ds.ctx, 64, 64, vk::Format::eR16G16B16A16Sfloat, vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled, layers);
+
+  irradiance_pass.image_view = ds.storage.create_2Darray_view(ds.ctx, irradiance_img, vk::ImageAspectFlagBits::eColor);
+
+  drv::DescriptorBinder binder {ds.descriptors.get(irradiance_pass.descriptor)};
+  binder
+    .bind_combined_img(0, radiance_array->api_view(), sampler)
+    .bind_storage_image(2, irradiance_pass.image_view->api_view())
+    .bind_ubo(1, irradiance_pass.samples_buffer->api_buffer())
+    .write(ds.ctx);
+  
+  auto cmd = ds.submit_pool.start_cmd(ds.ctx);
+  vk::CommandBufferBeginInfo begin_info {};
+  cmd.begin(begin_info);
+  
+  drv::ImageBarrier to_general{irradiance_img, vk::ImageAspectFlagBits::eColor};
+
+  to_general.set_range(0, 1, 0, layers);
+  to_general.change_layout(vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+  to_general.access_msk(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite);
+  to_general.write(cmd, vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eComputeShader);
+
+  cmd.bindPipeline(vk::PipelineBindPoint::eCompute, ds.pipelines.get(irradiance_pass.pipeline));
+  cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, ds.pipelines.get_layout(irradiance_pass.pipeline), 0, {ds.descriptors.get(irradiance_pass.descriptor)}, {});
+  cmd.dispatch(8, 16, layers);
+
+  drv::ImageBarrier to_sampled{irradiance_img, vk::ImageAspectFlagBits::eColor};
   to_sampled.set_range(0, 1, 0, layers);
   to_sampled.change_layout(vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal);
   to_sampled.access_msk(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead);
