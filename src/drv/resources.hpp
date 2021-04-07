@@ -111,13 +111,14 @@ namespace drv {
     ImageID create_depth2D_rt(Context &ctx, u32 width, u32 height);
     ImageID create_rt(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage);
     ImageID create_cubemap(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage);
-    ImageID create_image2D_array(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers);
+    ImageID create_image2D_array(Context &ctx, u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers, u32 levels = 1);
 
     ImageViewID create_image_view(Context &ctx, const ImageID &img, const vk::ImageViewType &t, const vk::ImageSubresourceRange &range, vk::ComponentMapping map = {});
     ImageViewID create_rt_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, vk::ComponentMapping map = {});
     ImageViewID create_cubemap_view(Context &ctx, const ImageID &img, 
       const vk::ImageAspectFlags &flags, u32 base_mip = 0, u32 mips = 1, vk::ComponentMapping map = {});
     ImageViewID create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags);
+    ImageViewID create_2Darray_mip_view(Context &ctx, const ImageID &img, vk::ImageAspectFlags flags, u32 mip_level = 0);
     ImageViewID create_2Dlayer_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, u32 layer);
 
   private: 

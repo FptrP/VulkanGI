@@ -1,0 +1,48 @@
+#version 450 core
+
+#include "include/oct_coord.glsl"
+#include "include/real_sh.glsl"
+
+#define TOTAL_SAMPLES (256*256)
+
+layout (std430, binding = 0) readonly buffer inData {
+  Sample samples[];
+};
+
+layout (std430, binding = 1) writeonly buffer outData {
+  ShProbe probes[];
+};
+
+layout (binding = 2) uniform sampler2DArray texprobes;
+
+#define PI 3.14159265359
+
+layout (local_size_x = 1) in;
+
+void main() {
+  float index = float(gl_WorkGroupID.x);
+  ShProbe out_probe;
+
+  for (int i = 0; i < NUM_COEFFS; i++) {
+    out_probe.coeffs[i] = 0.f;
+  }
+
+  const float factor = 4.0f * PI/TOTAL_SAMPLES;
+  for (int i = 0; i < TOTAL_SAMPLES; i++) {
+    vec3 w = vec3(samples[i].w[0], samples[i].w[1], samples[i].w[2]);
+    vec2 uv = oct_encode(w);
+
+    float sampled_dist = texture(texprobes, vec3(uv, index)).r;
+
+    for (int k = 0; k < NUM_COEFFS; k++) {
+      out_probe.coeffs[k] += sampled_dist * samples[i].sh[k];
+    }
+  }
+
+  
+  for (int i = 0; i < NUM_COEFFS; i++) {
+    out_probe.coeffs[i] *= factor;
+  }
+
+  probes[gl_WorkGroupID.x] = out_probe;
+}

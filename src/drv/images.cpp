@@ -337,7 +337,7 @@ namespace drv {
   }
 
   ImageID ResourceStorage::create_image2D_array(Context &ctx, 
-    u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers) 
+    u32 width, u32 height, vk::Format fmt, vk::ImageUsageFlags usage, u32 layers, u32 levels) 
   {
     Image img;
     vk::ImageCreateInfo info {};
@@ -345,7 +345,7 @@ namespace drv {
     info.imageType = vk::ImageType::e2D;
     info.initialLayout = vk::ImageLayout::eUndefined;
     info.extent = vk::Extent3D {width, height, 1};
-    info.mipLevels = 1;
+    info.mipLevels = max(levels, 1u);
     info.arrayLayers = layers;
     info
       .setQueueFamilyIndexCount(ctx.queue_family_count())
@@ -368,6 +368,26 @@ namespace drv {
       .setBaseArrayLayer(0)
       .setLayerCount(img->info.arrayLayers)
       .setBaseMipLevel(0)
+      .setLevelCount(1);
+    
+    vk::ImageViewCreateInfo info {};
+    info.setFormat(img->info.format);
+    info.setImage(img->handle);
+    info.setViewType(vk::ImageViewType::e2DArray);
+    info.setSubresourceRange(range);
+    info.setComponents(vk::ComponentMapping{});
+    
+    ImageView view {ctx.get_device().createImageView(info), img};
+    return views.create(view);
+  }
+
+  ImageViewID ResourceStorage::create_2Darray_mip_view(Context &ctx, const ImageID &img, vk::ImageAspectFlags flags, u32 mip_level) {
+    vk::ImageSubresourceRange range {};
+    range
+      .setAspectMask(flags)
+      .setBaseArrayLayer(0)
+      .setLayerCount(img->info.arrayLayers)
+      .setBaseMipLevel(mip_level)
       .setLevelCount(1);
     
     vk::ImageViewCreateInfo info {};

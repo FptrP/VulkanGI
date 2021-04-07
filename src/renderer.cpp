@@ -21,10 +21,14 @@ void Renderer::init(SDL_Window *w) {
   gbuffer_subpass->init(ds);
 
   shading_subpass = new ShadingPass{ds, *frame_data};
+  shdebug_subpass = new SHDebugSubpass{ds, *frame_data};
 }
 
 void Renderer::release() {
   imgui_ctx.release(ds.ctx);
+
+  delete shdebug_subpass;
+
   shading_subpass->release(ds);
   delete shading_subpass;
 
@@ -128,6 +132,19 @@ void Renderer::handle_event(const SDL_Event &event) {
 
 void Renderer::render(drv::DrawContext &dctx) {
   imgui_ctx.new_frame();
+
+  static bool show_sh = false;
+  {
+
+    ImGui::Begin("SHDebug");                          // Create a window called "Hello, world!" and append into it.
+
+    if (ImGui::Button("SwitchView"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+      show_sh = !show_sh;
+
+    ImGui::End();
+  }
+
+
   gbuffer_subpass->render(dctx, ds);
   
   vk::ClearValue color {};
@@ -143,7 +160,12 @@ void Renderer::render(drv::DrawContext &dctx) {
       
   dctx.dcb.beginRenderPass(info, vk::SubpassContents::eInline);
 
-  shading_subpass->render(dctx, ds);
+  if (show_sh) {
+    shdebug_subpass->render(dctx, ds);
+  } else {
+    shading_subpass->render(dctx, ds);
+  }
+
   imgui_ctx.render(dctx.dcb);
   dctx.dcb.endRenderPass();
   dctx.dcb.end();

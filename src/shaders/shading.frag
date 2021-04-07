@@ -6,6 +6,7 @@
 #include "include/brdf.glsl"
 #include "include/trace_probe.glsl"
 #include "include/shadows.glsl"
+#include "include/real_sh.glsl"
 
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
@@ -25,9 +26,16 @@ layout(set = 0, binding = 5) uniform LightSourceInfo {
   vec4 radiance[MAX_LIGHTS];
 } lights;
 
+layout(set = 0, binding = 6) readonly buffer Sh {
+  ShProbe sh_probes[];
+};
+
 layout (push_constant) uniform PushData {
   vec3 camera_origin;
 } pc;
+
+
+bool trace_sh(in vec3 origin, in vec3 dir, uint probe_id, inout float tmin, inout float tmax);
 
 void main() {
   vec3 world_dir = texture(worldpos_tex, uv).xyz;
@@ -93,4 +101,8 @@ void main() {
   }
 
   outColor = shadow * vec4(irradiance, 0.f) + 0.1 * vec4(albedo * computePrefilteredIrradiance(world_pos, norm), 0.f);
+}
+
+bool trace_sh(in vec3 origin, in vec3 dir, uint probe_id, inout float tmin, inout float tmax) {
+  return true;
 }

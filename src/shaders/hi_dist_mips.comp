@@ -1,0 +1,28 @@
+#version 450 core 
+
+layout (set = 0, binding = 0) uniform sampler2DArray distances_tex_src;
+layout (set = 0, binding = 1, r32f) uniform writeonly image2DArray distances_tex_dst;
+
+layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+
+void main() {
+  ivec2 pixel_coord = ivec2(gl_GlobalInvocationID.xy);
+  int layer = int(gl_GlobalInvocationID.z);
+
+  const ivec2 offsets[] = ivec2[](
+    ivec2(0, 0),
+    ivec2(0, 1),
+    ivec2(1, 0),
+    ivec2(1, 1)
+  );
+  
+  float min_dist = 1e10;
+
+  for (int i = 0; i < 4; i++) {
+    ivec3 sample_coord = ivec3(2*pixel_coord + offsets[i], layer); 
+    float sampled_dist = texelFetch(distances_tex_src, sample_coord, 0).r;
+    min_dist = min(sampled_dist, min_dist);
+  }
+
+  imageStore(distances_tex_dst, ivec3(pixel_coord, layer), vec4(min_dist, 0, 0, 0));
+}

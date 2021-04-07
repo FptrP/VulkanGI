@@ -42,6 +42,7 @@ set(SOURCES
   src/scene.cpp
   src/gbufferpass.cpp
   src/cubemap_shadow.cpp
+  src/spherical_harmonics.cpp
   src/light_field_probes.cpp
   src/drv/context.cpp
   src/drv/draw_context.cpp

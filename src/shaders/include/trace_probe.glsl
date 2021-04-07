@@ -342,7 +342,7 @@ int trace_segment(
     if (dot(texc_dir, segment_end - texc) <= INV_TEX_SIZE.x) {
       return TRACE_RESULT_MISS;
     } else {
-      texc = end_texc + texc_dir * INV_TEX_SIZE.x * 0.1;
+      texc = end_texc + texc_dir * INV_TEX_SIZE.x;
     }
   }
 

@@ -7,7 +7,7 @@
 layout (set = 0, binding = 0) 
 uniform sampler2DArray textures;
 
-layout (set = 0, binding = 1)
+layout (std140, set = 0, binding = 1)
 uniform Data {
   vec4 samples[MAX_SAMPLES]; 
 };

@@ -9,7 +9,7 @@
 #include "shading.hpp"
 #include "cubemap_shadow.hpp"
 #include "render_oct.hpp"
-
+#include "shdebug_subpass.hpp"
 
 enum class RenderEvents {
   None = 0,
@@ -42,6 +42,7 @@ private:
   GBufferSubpass *gbuffer_subpass = nullptr;
   ShadingPass *shading_subpass = nullptr;
   CubemapShadowRenderer *renderer = nullptr;
+  SHDebugSubpass *shdebug_subpass = nullptr;
 };
 
 #endif

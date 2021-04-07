@@ -41,9 +41,12 @@ private:
   void bind_resources(DriverState &ds, Scene &scene);
   
   void init_compute_resources(DriverState &ds);
+  void init_hidist_resources(DriverState &ds);
+
   void downsample_distances(DriverState &ds);
   void compute_irradiance(DriverState &ds);
-  
+  void create_hidist_images(DriverState &ds);
+
   struct UBOData {
     glm::mat4 camera_proj;
     glm::vec4 camera_origin;
@@ -88,6 +91,12 @@ private:
     drv::ImageViewID image_view;
     drv::BufferID samples_buffer;
   } irradiance_pass;
+
+  struct {
+    drv::ComputePipelineID pipeline;
+    drv::DescriptorSetLayoutID descriptor_layout;
+    vk::Sampler nearest_sampler;
+  } hidist_pass;
 
   static constexpr u32 SAMPLES_COUNT = 1024;
 

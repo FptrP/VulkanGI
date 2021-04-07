@@ -5,6 +5,7 @@
 #include "postprocessing.hpp"
 #include "scene.hpp"
 #include "lightfield_probes.hpp"
+#include "shpherical_harmonics.hpp"
 
 #include <iostream>
 
@@ -14,17 +15,41 @@ struct FrameGlobal {
     scene.gen_buffers(ds);
 
     scene.add_light({0.f, 4.f, 0.f}, {10.f, 10.f, 10.f});
-    scene.add_light({5.09163, 1.28635, -0.324504}, {0.f, 2.f, 0.f});
+    scene.add_light({5.30641, 0.947165, -1.44263}, {0.f, 2.f, 0.f});
     scene.gen_shadows(ds);
 
     scene.gen_textures(ds);
 
     light_field.init(ds);
     light_field.render(ds, scene, glm::vec3{-10, 0.295498, -4}, glm::vec3{10, 2.50458, 4}, glm::uvec3{6, 3, 4});
+
+    vk::SamplerCreateInfo smp {};
+    smp
+      .setMinFilter(vk::Filter::eLinear)
+      .setMagFilter(vk::Filter::eLinear)
+      .setMipmapMode(vk::SamplerMipmapMode::eLinear)
+      .setMinLod(0.f)
+      .setMaxLod(10.f);
+
+    vk::SamplerCreateInfo smp2 {};
+    smp2
+      .setMinFilter(vk::Filter::eNearest)
+      .setMagFilter(vk::Filter::eNearest)
+      .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+      .setMinLod(0.f)
+      .setMaxLod(10.f);
+    
+    default_sampler = ds.ctx.get_device().createSampler(smp);
+    nearest_sampler = ds.ctx.get_device().createSampler(smp2);
+
+    auto sh_pass = new SHPass{ds};
+    sh_probes = sh_pass->integrate(ds, light_field.get_distance_array(), default_sampler);
+    delete sh_pass;
   }
 
   void release(DriverState &ds) {
     light_field.release(ds);
+    ds.ctx.get_device().destroySampler(default_sampler);
   }
 
   void update(float dt) {
@@ -74,17 +99,25 @@ struct FrameGlobal {
 
   LightField &get_light_field() { return light_field; }
 
+  drv::BufferID &get_sh_probes() { return sh_probes; }
+  vk::Sampler get_default_sampler() { return default_sampler; }
+  vk::Sampler get_nearest_sampler() { return nearest_sampler; }
+  
 private:
   Scene scene;
   GBuffer gbuffer;
   LightField light_field;
+  
+  drv::BufferID sh_probes;
+  vk::Sampler default_sampler;
+  vk::Sampler nearest_sampler;
 
   std::mutex frame_lock;
   Camera camera;
   
   glm::mat4 camera_matrix;
   glm::vec3 camera_pos;
-  const glm::mat4 projection = glm::perspective(glm::radians(60.f), 4.f/3.f, 0.01f, 15.f);
+  const glm::mat4 projection = glm::perspective(glm::radians(60.f), 16.f/9.f, 0.01f, 100.f);
 };
 
 #endif
