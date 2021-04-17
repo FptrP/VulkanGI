@@ -149,6 +149,14 @@ float dist_to_intersection(in vec3 o, in vec3 d, in vec3 v) {
   return numer / denom;
 }*/
 
+bool trace_hi_lowres(
+  in vec3 ray_origin,
+  in vec3 ray_dir,
+  in uint probe_id, 
+  inout vec2 texc,
+  in vec2 segment_end_texc,
+  inout vec2 end_high_res_texc,
+  inout float current_lod);
 
 int trace_high_res(
   in vec3 ray_origin,
@@ -326,10 +334,10 @@ int trace_segment(
   vec2 end_oct = oct_encode(normalize(probe_end));
   vec2 texc = start_oct;
   vec2 segment_end = end_oct;
-  
+  float lod = 5.f;
   for (int i = 0; i < 32; i++) {
     vec2 end_texc = segment_end;
-    if (!trace_low_res(ray_origin, ray_dir, probe_id, texc, segment_end, end_texc)) {
+    if (!trace_hi_lowres(ray_origin, ray_dir, probe_id, texc, segment_end, end_texc, lod)) {
       return TRACE_RESULT_MISS;
     } else {
       int result = trace_high_res(ray_origin, ray_dir, texc, end_texc, probe_id, tmin, tmax, hit_texc);
@@ -338,11 +346,12 @@ int trace_segment(
       }
     }
 
+    lod = 5.f;
     vec2 texc_dir = normalize(segment_end - texc);
     if (dot(texc_dir, segment_end - texc) <= INV_TEX_SIZE.x) {
       return TRACE_RESULT_MISS;
     } else {
-      texc = end_texc + texc_dir * INV_TEX_SIZE.x;
+      texc = end_texc + texc_dir * TEX_SIZE.x * 0.1;
     }
   }
 
@@ -460,6 +469,270 @@ vec3 computePrefilteredIrradiance(vec3 wsPosition, vec3 wsN) {
 	}
 
 	return 2.0 * PI * sumIrradiance / sumWeight;
+}
+
+bool trace_hi_lowres(
+  in vec3 ray_origin,
+  in vec3 ray_dir,
+  in uint probe_id, 
+  inout vec2 texc,
+  in vec2 segment_end_texc,
+  inout vec2 end_high_res_texc,
+  inout float current_lod)
+{
+  vec2 P0 = texc * TEX_SIZE;
+  vec2 P1 = segment_end_texc * TEX_SIZE;
+
+  P1 += vec2((dist_squared(P0, P1) < 0.0001) ? 0.01 : 0.0);
+
+  vec2 delta = P1 - P0;
+
+  bool permute = false;
+  if (abs(delta.x) < abs(delta.y)) {
+    permute = true;
+    delta = delta.yx; P0 = P0.yx; P1 = P1.yx;
+  }
+
+  float   step_dir = sign(delta.x);
+  float   invdx = step_dir / delta.x;
+  vec2 dP = vec2(step_dir, delta.y * invdx);
+
+  vec3 initial_direction = oct_decode(texc);
+  float prev_ray_distance = max(0.0, dist_to_intersection(ray_origin, ray_dir, initial_direction));
+
+  float  end = P1.x * step_dir;
+
+  float abs_inv_dPy = 1.0 / abs(dP.y);
+
+  float max_texcoord_distance = dot(segment_end_texc - texc, segment_end_texc - texc);
+
+  int iterations = 128;
+  for (vec2 P = P0; ((P.x * sign(delta.x)) <= end) && iterations > 0; ) {
+    
+    float inv_lod_scale = exp2(-current_lod);
+    float lod_scale = exp2(current_lod);
+
+    vec2 hit_pixel = inv_lod_scale * (permute ? P.yx : P);
+    float scene_dist = texelFetch(probe_dist, ivec3(hit_pixel, probe_id), int(current_lod)).r;
+
+    vec2 pixel_edge_dist = (sign(delta) * 0.5 + 0.5) - sign(delta) * fract(hit_pixel);
+    float dist_to_edge = min(pixel_edge_dist.x, pixel_edge_dist.y * abs_inv_dPy);
+    vec2 hit_edge = hit_pixel + dP * dist_to_edge;
+
+    end_high_res_texc = hit_edge * lod_scale * INV_TEX_SIZE;
+    end_high_res_texc = permute ? end_high_res_texc.yx : end_high_res_texc;
+
+    if (dot(end_high_res_texc - texc, end_high_res_texc - texc) > max_texcoord_distance) {
+      end_high_res_texc = segment_end_texc;
+    }
+
+    vec3 probe_dir = oct_decode(end_high_res_texc);
+    float ray_dist = max(0.0, dist_to_intersection(ray_origin, ray_dir, probe_dir));
+
+    float max_dist = max(ray_dist, prev_ray_distance);
+    float min_dist = min(ray_dist, prev_ray_distance);
+    
+
+    if (scene_dist < max_dist) {
+      current_lod = (min_dist > scene_dist)? 0.f : (current_lod - 1.f);
+      texc = (permute ? P.yx : P) * INV_TEX_SIZE;
+      if (current_lod <= 0.f) {
+        return true;
+      }
+    } else {
+      prev_ray_distance = ray_dist;
+      const float epsilon = 0.001; // pixels
+      P += dP * (dist_to_edge * lod_scale + epsilon);
+    }
+
+    iterations--;
+  }
+
+  texc = segment_end_texc;
+  return false;
+}
+
+int trace_hi_segment(
+  in vec3 ray_origin,
+  in vec3 ray_dir,
+  in float t0,
+  in float t1,
+  in int probe_id,
+  inout float tmin,
+  inout float tmax,
+  inout vec2 hit_texc)
+{  
+  const float RAY_EPS = 0.001;
+
+  float t_start = t0 + RAY_EPS;
+  float t_end = t1 - RAY_EPS;
+
+  vec2 start_uv = oct_encode(normalize(ray_origin + ray_dir * t_start));
+  vec2 end_uv = oct_encode(normalize(ray_origin + ray_dir * t_end));
+  
+  float current_lod = 2.f;
+
+  vec2 P0 = start_uv * TEX_SIZE;
+  vec2 P1 = end_uv * TEX_SIZE;
+
+  vec2 delta = P1 - P0;
+
+    // Permute so that the primary iteration is in x to reduce
+    // large branches later
+  bool permute = false;
+  if (abs(delta.x) < abs(delta.y)) {
+    permute = true;
+    delta = delta.yx;
+    P0 = P0.yx;
+  }
+
+  float   stepDir = sign(delta.x);
+  float   invdx = stepDir / delta.x;
+  vec2 dP = vec2(stepDir, delta.y * invdx);
+  float absInvdPY = 1.0 / abs(dP.y);
+
+  vec2 P = P0;
+
+  int last_state = TRACE_RESULT_MISS;
+  int iterations = 64;
+
+  while (current_lod >= 0 && iterations > 0) {
+    //1. Get P's cell -> reconstruct plane and get t_bound
+    //2 Calculate t_instersection intersection beetween ray and plane
+    //3. if plane not hit current_lod += 2, t = t_bound + eps, P = project(t)
+    //4 else t = t_intersection, P = prohect (t)
+
+    float scale_inv = exp2(-current_lod); 
+    vec3 current_dir = oct_decode(P * INV_TEX_SIZE);
+    float d1 = dist_to_intersection(ray_origin, ray_dir, current_dir);
+    
+    float t = dot(current_dir * d1 - ray_origin, ray_dir);
+    vec2 cell = P * scale_inv;
+    
+    vec2 tex_distances = (sign(delta) * 0.5 + 0.5) - sign(delta) * fract(cell);
+    vec2 cell_end = cell + dP * min(tex_distances.x, tex_distances.y * absInvdPY);
+    vec2 P_bound = P + (dP * min(tex_distances.x, tex_distances.y * absInvdPY) + 0.001) * exp2(current_lod);
+
+    vec2 end = (permute?  cell_end.yx : cell_end.xy) * exp2(current_lod) * INV_TEX_SIZE; //to [0; 1]
+
+    vec3 end_dir = oct_decode(end);
+
+    float end_distance = dist_to_intersection(ray_origin, ray_dir, end_dir);
+    float t_bound = dot(end_dir * end_distance - ray_origin, ray_dir);
+
+    t_bound = clamp(t_bound, t, t_end);
+
+    vec2 cell_center = floor(permute? cell.yx : cell.xy) + vec2(0.5, 0.5);
+
+    vec3 plane_direction = oct_decode(cell_center*exp2(current_lod)*INV_TEX_SIZE);
+    float plane_distance = texelFetch(probe_dist, ivec3(cell_center, probe_id), int(current_lod)).r;
+    plane_direction *= plane_distance;
+
+    //plane intersection
+
+    float D = dot(ray_origin, plane_direction);
+    float Q = dot(ray_dir, plane_direction);
+
+    if (abs(Q) < 1e-6) {
+      return TRACE_RESULT_MISS;
+    }
+
+    float t_hit = (dot(plane_direction, plane_direction) - D)/Q;
+
+    last_state = TRACE_RESULT_MISS;
+
+    if (D < 1.f && t_hit >= t && t_hit < t_bound) {
+      tmax = t_hit;
+      P = oct_encode(ray_origin + t_hit * ray_dir) * TEX_SIZE;
+      current_lod = min(current_lod + 2.f, 5.f);
+      last_state = TRACE_RESULT_HIT;
+    } else if (D < 1.f && t_hit < t) {
+      tmin = t;
+      current_lod = min(current_lod + 2.f, 5.f);
+      last_state = TRACE_RESULT_UNKNOWN;
+    } else if (D < 1.f && t_hit > t_bound) {
+      P = P_bound;
+      last_state = TRACE_RESULT_MISS;
+    } else if (D > 1.f && t_hit < t) {
+      P = P_bound;
+      last_state = TRACE_RESULT_MISS;
+    } else if (D > 1.f && t_hit > t) {
+      tmin = t;
+      current_lod = min(current_lod + 2.f, 5.f);
+      last_state = TRACE_RESULT_UNKNOWN;
+    }
+  
+    current_lod = min(current_lod - 1.f, 5.f);
+    iterations--;
+  }
+
+  if (last_state == TRACE_RESULT_HIT) {
+    hit_texc =  oct_encode(ray_origin + tmax * ray_dir);
+  }
+
+  return last_state;
+}
+
+int trace_hi_probe(
+  in vec3 ray_origin,
+  in vec3 ray_dir, 
+  in int probe_id,
+  inout float tmin,
+  inout float tmax,
+  inout vec2 hitexc) {
+  
+  const float degenerateEpsilon = 0.001;
+  vec3 probeOrigin = get_probe_position(probe_id);
+
+  vec3 probeRayOrigin = ray_origin - probeOrigin;
+  vec3 probeRayDir = normalize(ray_dir);
+
+  float segments[5];
+  compute_trace_segments(probeRayOrigin, 1.0/probeRayDir, tmin, tmax, segments);
+
+  for (int i = 0; i < 4; i++) {
+    if (abs(segments[i+1] - segments[i]) >= degenerateEpsilon) {
+      int result = trace_hi_segment(probeRayOrigin, probeRayDir, segments[i], segments[i+1], probe_id, tmin, tmax, hitexc);
+      if (result != TRACE_RESULT_MISS) {
+        return result;
+      }
+    }
+  }
+  return TRACE_RESULT_MISS;
+}
+
+int trace_hi(
+  in vec3 ray_origin,
+  in vec3 ray_dir,
+  inout float tmax,
+  out vec2 hittexc,
+  out int hit_probe) {
+  
+  hit_probe = -1;
+
+  vec3 base_probe = nearest_probe(ray_origin);
+  int i = 0;
+
+  int probes_left = 8;
+  float tmin = 0.f;
+  
+  int result = TRACE_RESULT_UNKNOWN;
+
+  while (probes_left > 0) {
+    int probe_id = next_index(base_probe, i);
+    result = trace_hi_probe(ray_origin, ray_dir, probe_id, tmin, tmax, hittexc);
+    if (result == TRACE_RESULT_UNKNOWN) {
+      i = (i + 3) & 7;
+      probes_left--;
+    } else {
+      if (result == TRACE_RESULT_HIT) {
+        hit_probe = probe_id;
+      }
+      break;
+    }
+  }
+
+  return result;
 }
 
 

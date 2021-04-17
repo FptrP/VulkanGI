@@ -117,7 +117,7 @@ namespace drv {
     ImageViewID create_rt_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, vk::ComponentMapping map = {});
     ImageViewID create_cubemap_view(Context &ctx, const ImageID &img, 
       const vk::ImageAspectFlags &flags, u32 base_mip = 0, u32 mips = 1, vk::ComponentMapping map = {});
-    ImageViewID create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags);
+    ImageViewID create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, bool one_mip=true);
     ImageViewID create_2Darray_mip_view(Context &ctx, const ImageID &img, vk::ImageAspectFlags flags, u32 mip_level = 0);
     ImageViewID create_2Dlayer_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, u32 layer);
 

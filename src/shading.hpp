@@ -100,7 +100,7 @@ struct ShadingPass {
     drv::DescriptorBinder lf_binder { ds.descriptors.get(lf_set) };
     lf_binder
       .bind_ubo(0, ubo->api_buffer())
-      .bind_combined_img(1, frame_data.get_light_field().get_distance_array()->api_view(), nearest_sampler)
+      .bind_combined_img(1, frame_data.get_light_field().get_hidistance_array()->api_view(), nearest_sampler)
       .bind_combined_img(2, frame_data.get_light_field().get_normal_array()->api_view(), nearest_sampler)
       .bind_combined_img(3, frame_data.get_light_field().get_lowres_array()->api_view(), nearest_sampler)
       .bind_combined_img(4, frame_data.get_light_field().get_radiance_array()->api_view(), frame_data.get_gbuffer().sampler)
@@ -160,18 +160,7 @@ struct ShadingPass {
 
   void render(drv::DrawContext &draw_ctx, DriverState &ds) {
      {
-      static float f = 0.0f;
-      static int counter = 0;
-
-      ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-      ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-
-      if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-        counter++;
-      ImGui::SameLine();
-      ImGui::Text("counter = %d", counter);
-
+      ImGui::Begin("frame info");
       ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
       ImGui::End();
     }
@@ -191,7 +180,8 @@ struct ShadingPass {
     info.setMinFilter(vk::Filter::eNearest);
     info.setMagFilter(vk::Filter::eNearest);
     info.setMipmapMode(vk::SamplerMipmapMode::eNearest);
-    
+    info.setMinLod(0.f);
+    info.setMaxLod(1000.f);
     nearest_sampler = ds.ctx.get_device().createSampler(info);
   }
 

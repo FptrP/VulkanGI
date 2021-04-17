@@ -361,14 +361,23 @@ namespace drv {
     return images.create(img);
   }
 
-  ImageViewID ResourceStorage::create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags) {
+  ImageViewID ResourceStorage::create_2Darray_view(Context &ctx, const ImageID &img, const vk::ImageAspectFlags &flags, bool one_mip) {
     vk::ImageSubresourceRange range {};
-    range
+    if (one_mip) {
+      range
       .setAspectMask(flags)
       .setBaseArrayLayer(0)
       .setLayerCount(img->info.arrayLayers)
       .setBaseMipLevel(0)
       .setLevelCount(1);
+    } else {
+      range
+      .setAspectMask(flags)
+      .setBaseArrayLayer(0)
+      .setLayerCount(img->info.arrayLayers)
+      .setBaseMipLevel(0)
+      .setLevelCount(img->info.mipLevels);
+    }
     
     vk::ImageViewCreateInfo info {};
     info.setFormat(img->info.format);

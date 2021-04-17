@@ -136,9 +136,9 @@ void Renderer::render(drv::DrawContext &dctx) {
   static bool show_sh = false;
   {
 
-    ImGui::Begin("SHDebug");                          // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("SHDebug");
 
-    if (ImGui::Button("SwitchView"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+    if (ImGui::Button("SwitchView"))                        
       show_sh = !show_sh;
 
     ImGui::End();

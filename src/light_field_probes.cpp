@@ -337,7 +337,7 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
   auto ARR_USG = vk::ImageUsageFlagBits::eColorAttachment|vk::ImageUsageFlagBits::eSampled;
   auto layers = d.x * d.y * d.z;
   auto dist_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR32Sfloat, ARR_USG|vk::ImageUsageFlagBits::eStorage, layers, DIST_MIPS);
-  dist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor);
+  dist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor, true);
 
   auto norm_img = ds.storage.create_image2D_array(ds.ctx, OCT_RES, OCT_RES, vk::Format::eR16G16B16A16Sfloat, ARR_USG, layers);
   norm_array = ds.storage.create_2Darray_view(ds.ctx, norm_img, vk::ImageAspectFlagBits::eColor);
@@ -379,15 +379,21 @@ void LightField::render(DriverState &ds, Scene &scene, glm::vec3 bmin, glm::vec3
         lightprobe_pass.set_image_sampler(0, cm_dist, sampler);
         lightprobe_pass.set_image_sampler(1, cm_color, sampler);
         lightprobe_pass.set_image_sampler(2, cm_norm, sampler);
+        std::cout << "Filling probe\n";
         lightprobe_pass.render_and_wait(ds);
+        std::cout << "End\n";
         probes.push_back(probe);
       }
     }
   }
-
+  std::cout << "Downsampling distances\n";
   downsample_distances(ds);
+  std::cout << "End\n";
+  std::cout << "Irradiance\n";
   compute_irradiance(ds);
+  std::cout << "End\n";
   create_hidist_images(ds);
+  hidist_array = ds.storage.create_2Darray_view(ds.ctx, dist_img, vk::ImageAspectFlagBits::eColor, false);
 }
 
 void LightField::transform_cubemap_layout(vk::CommandBuffer &buf, vk::ImageLayout src, vk::ImageLayout dst) {
@@ -617,6 +623,7 @@ void LightField::compute_irradiance(DriverState &ds) {
 }
 
 void LightField::create_hidist_images(DriverState &ds) {
+  std::cout << "HiDist started\n";
   auto layers = dim.x * dim.y * dim.z;
 
   std::vector<VkSampler> samplers;
@@ -673,4 +680,6 @@ void LightField::create_hidist_images(DriverState &ds) {
   auto fence = ds.submit_pool.submit_cmd(ds.ctx, cmd);
   ds.ctx.get_device().waitForFences({fence}, VK_TRUE, ~(0ul));
   ds.ctx.get_device().destroyFence(fence);
+
+  std::cout << "HiDist created\n";
 }

@@ -49,12 +49,10 @@ void main() {
   float metalic = texture(normal_tex, uv).w;
   float roughness = texture(worldpos_tex, uv).w;
 
-  vec3 reflection_ray = normalize(reflect(world_dir, norm));
   
   vec3 ray_hit;
   uint probe_hit;
   float s = 1.f;
-  vec3 start = world_pos;// + 1e-6 * norm;
 
   if (draw_probes(pc.camera_origin, world_pos)) {
     outColor = vec4(0.8, 0.8, 0.8, 1.f);
@@ -82,12 +80,14 @@ void main() {
     
     shadow += pcf_octmap(oct_shadows, i, -light_dir, length(light_dir));
   }
-
+  
   shadow /= lights_count;
-
-  if (shadow > 0.0001f) {
+  vec3 reflected = vec3(0);
+  if (true) {
     vec2 out_texc;
     int hit = -1;
+    vec3 start = world_pos + 1e-6 * norm;
+    vec3 reflection_ray = normalize(reflect(world_dir, norm));
     float trace_dist = 5.f;
     int result = trace(start, reflection_ray, trace_dist, out_texc, hit); 
 
@@ -96,11 +96,11 @@ void main() {
       vec3 hitpos = world_pos + reflection_ray * trace_dist;
       
       vec3 F = calcFresnel(pc.camera_origin, world_pos, norm, hitpos, albedo, metalic, roughness);
-      irradiance += F * reflection;
+      reflected += 0.5 * F * reflection;
     }
   }
 
-  outColor = shadow * vec4(irradiance, 0.f) + 0.1 * vec4(albedo * computePrefilteredIrradiance(world_pos, norm), 0.f);
+  outColor = 3 * vec4(reflected, 0) + shadow * vec4(irradiance, 0.f) + 0.1 * vec4(albedo * computePrefilteredIrradiance(world_pos, norm), 0.f);
 }
 
 bool trace_sh(in vec3 origin, in vec3 dir, uint probe_id, inout float tmin, inout float tmax) {
