@@ -88,7 +88,7 @@ void main() {
     int hit = -1;
     vec3 start = world_pos + 1e-6 * norm;
     vec3 reflection_ray = normalize(reflect(world_dir, norm));
-    float trace_dist = 5.f;
+    float trace_dist = 10.f;
     int result = trace(start, reflection_ray, trace_dist, out_texc, hit); 
 
     if (result == TRACE_RESULT_HIT) {

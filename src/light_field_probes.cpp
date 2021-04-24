@@ -8,7 +8,7 @@
 const u32 CUBEMAP_RES = 512;
 const vk::Extent2D CUBEMAP_EXT {CUBEMAP_RES, CUBEMAP_RES};
 const u32 OCT_RES = 1024;
-const u32 DIST_MIPS = 6;
+const u32 DIST_MIPS = 7;
 
 void LightField::calc_matrix(u32 side, vk::Extent2D ext, glm::vec3 pos, glm::mat4 &out) {
   float aspect = float(ext.width)/float(ext.height);
