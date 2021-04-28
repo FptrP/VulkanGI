@@ -329,7 +329,8 @@ bool trace_lod_lowres(
   in int lod,
   inout vec2 texc,
   in vec2 segment_end_texc,
-  inout vec2 end_high_res_texc)
+  inout vec2 end_high_res_texc,
+  out vec2 next_start_uv)
 {
   float lod_scale = exp2(float(lod));
   float inv_lod_scale = 1.0/lod_scale;  
@@ -410,6 +411,9 @@ bool trace_lod_lowres(
       //
       //  -  texCoord should be where the ray entered the texel
       texc = (permute ? P.yx : P) * INV_TEX_SIZE.x * lod_scale;
+      //const float epsilon = 0.001; // pixels
+      //P += dP * (rayDistanceToNextPixelEdge + epsilon);
+      //next_start_uv = (permute? P.yx : P) * INV_TEX_SIZE.x * lod_scale; 
       return true;
     }
 
@@ -545,36 +549,27 @@ int trace_segment(
   vec2 end_oct = oct_encode(normalize(probe_end));
   vec2 texc = start_oct;
   vec2 segment_end = end_oct;
-  
 
+  vec2 _out; 
 
   for (int i = 0; i < 32; i++) {
     vec2 end_texc = segment_end;
-
-    if (!trace_lod_lowres(ray_origin, ray_dir, probe_id, 5, texc, segment_end, end_texc)) {
+#if 1
+    if (trace_lod_lowres(ray_origin, ray_dir, probe_id, 6, texc, segment_end, end_texc, _out)) {
+      vec2 subseg_end = end_texc;
+      if (!trace_lod_lowres(ray_origin, ray_dir, probe_id, 4, texc, subseg_end, end_texc, _out)) {
+        vec2 texc_dir = normalize(segment_end - texc);
+        texc = end_texc + texc_dir * INV_TEX_SIZE.x * 0.001;
+        continue;
+      }
+    } else {
       return TRACE_RESULT_MISS;
     }
-
-    vec2 pixel_dist = (end_texc - texc) * TEX_SIZE.x;
-
-    if (max(pixel_dist.x, pixel_dist.y) >= 0) {
-      vec2 temp = end_texc;
-      if (!trace_lod_lowres(ray_origin, ray_dir, probe_id, 4, texc, temp, end_texc)) {
-        return TRACE_RESULT_MISS;
-      }
-
-      pixel_dist = (end_texc - texc) * TEX_SIZE.x;
+#else
+    if (!trace_lod_lowres(ray_origin, ray_dir, probe_id, 5, texc, segment_end, end_texc, _out)) {
+      return TRACE_RESULT_MISS;
     }
-    
-    
-    if (max(pixel_dist.x, pixel_dist.y) >= 0) {
-      vec2 temp = end_texc;
-      if (!trace_lod_lowres(ray_origin, ray_dir, probe_id, 4, texc, temp, end_texc)) {
-        return TRACE_RESULT_MISS;
-      }
-    }
-    
-
+#endif
     int result = trace_high_res(ray_origin, ray_dir, texc, end_texc, probe_id, tmin, tmax, hit_texc);
     if (result != TRACE_RESULT_MISS) {
       return result;
@@ -591,6 +586,69 @@ int trace_segment(
 
   return TRACE_RESULT_MISS;
 }
+
+int trace_segment_alt(
+  in vec3 ray_origin,
+  in vec3 ray_dir,
+  in float t0,
+  in float t1,
+  in int probe_id,
+  inout float tmin,
+  inout float tmax,
+  inout vec2 hit_texc) {
+  
+  const float RAY_EPS = 0.001;
+  vec3 probe_start = ray_origin + ray_dir * (t0 + RAY_EPS);
+  vec3 probe_end = ray_origin + ray_dir * (t1 - RAY_EPS);
+
+  if (dist_squared(probe_start, probe_end) < 0.001) {
+    probe_start = ray_dir;
+  }
+
+  vec2 texc = oct_encode(normalize(probe_start));
+  vec2 segment_end = oct_encode(normalize(probe_end));
+  vec2 _out;
+
+  int lvl = 2;
+  
+  const int lods[3] = int[](4, 5, 6);
+  vec2 seg_end[4];
+  seg_end[lvl+1] = segment_end; 
+
+  for (int i = 0; i < 32; i++) {
+    bool highres = false;
+    if (trace_lod_lowres(ray_origin, ray_dir, probe_id, lods[lvl], texc, seg_end[lvl+1], seg_end[lvl], _out)) {
+      if (lvl > 0) {
+        lvl--;
+        continue;
+      } else {
+        highres = true;
+      }
+    }
+    
+    
+    if (highres) {
+      int result = trace_high_res(ray_origin, ray_dir, texc, seg_end[lvl], probe_id, tmin, tmax, hit_texc);
+      if (result != TRACE_RESULT_MISS) {
+        return result;
+      }
+    }
+
+
+    vec2 texc_dir = normalize(segment_end - texc);
+    if (dot(texc_dir, seg_end[lvl + 1] - texc) <= INV_TEX_SIZE.x) {
+      lvl++;
+      if (lvl > 2)
+        return TRACE_RESULT_MISS;
+    } 
+    
+    texc = seg_end[lvl] + texc_dir * INV_TEX_SIZE.x * 0.001;
+    
+  }
+
+  return TRACE_RESULT_MISS;
+}
+
 
 int trace_probe(
   in vec3 ray_origin,
