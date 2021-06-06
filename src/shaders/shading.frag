@@ -86,7 +86,7 @@ void main() {
   if (true) {
     vec2 out_texc;
     int hit = -1;
-    vec3 start = world_pos + 1e-6 * norm;
+    vec3 start = world_pos + 1e-2 * norm;
     vec3 reflection_ray = normalize(reflect(world_dir, norm));
     float trace_dist = 50.f;
     int result = trace(start, reflection_ray, trace_dist, out_texc, hit); 
@@ -96,7 +96,7 @@ void main() {
       vec3 hitpos = world_pos + reflection_ray * trace_dist;
       
       vec3 F = calcFresnel(pc.camera_origin, world_pos, norm, hitpos, albedo, metalic, roughness);
-      reflected += 0.5 * F * reflection;
+      reflected += F * reflection;
     }
   }
 

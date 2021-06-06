@@ -9,6 +9,10 @@ vec2 sign_nz(in vec2 v) {
   return vec2(sign_nz(v.x), sign_nz(v.y));
 }
 
+vec3 sign_nz(in vec3 v) {
+  return vec3(sign_nz(v.x), sign_nz(v.y), sign_nz(v.z));
+}
+
 vec3 oct_to_sphere(vec2 uv) {
   uv = 2.f * (uv - vec2(0.5f, 0.5f));
   vec3 v = vec3(uv.x, uv.y, 1.0 - abs(uv.x) - abs(uv.y));
@@ -36,6 +40,16 @@ vec3 oct_decode(vec2 uv) {
   }
 
   return normalize(v);
+}
+
+vec3 oct_center(vec2 uv) {
+  uv = 2.f * (uv - vec2(0.5f, 0.5f));
+  vec3 v = vec3(uv.x, uv.y, 1.0 - abs(uv.x) - abs(uv.y));
+  if (v.z < 0.0) {
+    v.xy = (1.0 - abs(v.yx)) * sign_nz(v.xy);
+  }
+
+  return normalize(sign(v));
 }
 
 vec2 oct_encode(in vec3 v) {

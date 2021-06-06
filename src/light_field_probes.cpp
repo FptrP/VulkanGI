@@ -198,13 +198,17 @@ void LightField::init(DriverState &ds) {
 
   ds.pipelines.load_shader(ds.ctx, "pass_vs", "src/shaders/pass_vert.spv", vk::ShaderStageFlagBits::eVertex);
   ds.pipelines.load_shader(ds.ctx, "cube_probe_to_oct_fs", "src/shaders/cube_probe_to_oct_frag.spv", vk::ShaderStageFlagBits::eFragment);
+  ds.pipelines.load_shader(ds.ctx, "cube_probe_to_oct_depth_fs", "src/shaders/cube_probe_to_oct_depth_frag.spv", vk::ShaderStageFlagBits::eFragment);
 
   lightprobe_pass
     .init_attachment(vk::Format::eR32Sfloat) //distance
     .init_attachment(vk::Format::eR16G16B16A16Sfloat) //normal
     .init_attachment(vk::Format::eR16G16B16A16Sfloat) //radiance
+  #if (OCT_DEPTH)  
+    .init(ds, 3, "cube_probe_to_oct_depth_fs");
+  #else
     .init(ds, 3, "cube_probe_to_oct_fs");
-  
+  #endif
   init_compute_resources(ds);
   init_hidist_resources(ds);
 }

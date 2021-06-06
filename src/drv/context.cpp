@@ -243,7 +243,7 @@ namespace drv {
     swapchain_fmt = info.imageFormat;
     swapchain_colorspace = info.imageColorSpace;
 
-    info.setPresentMode(vk::PresentModeKHR::eFifo);
+    info.setPresentMode(vk::PresentModeKHR::eImmediate);
 
     for (auto mode : modes) {
       if (mode == vk::PresentModeKHR::eMailbox) {

@@ -6,6 +6,7 @@
 #include "scene.hpp"
 #include "lightfield_probes.hpp"
 #include "shpherical_harmonics.hpp"
+#include "config.hpp"
 
 #include <iostream>
 

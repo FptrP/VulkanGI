@@ -1,0 +1,7 @@
+#ifndef CONFIG_HPP_INCLUDED
+#define CONFIG_HPP_INCLUDED
+
+#define OCT_DEPTH 1
+
+
+#endif

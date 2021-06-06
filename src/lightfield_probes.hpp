@@ -4,6 +4,7 @@
 #include "driverstate.hpp"
 #include "scene.hpp"
 #include "postprocessing.hpp"
+#include "config.hpp"
 
 struct LightFieldProbe {
   glm::vec3 pos;
