@@ -654,7 +654,7 @@ int trace_hi_segment(
   vec3 probe_end = ray_origin + ray_dir * (t1 - RAY_EPS);
 
   if (dist_squared(probe_start, probe_end) < 0.001) {
-    probe_start = ray_dir;
+    return TRACE_RESULT_MISS;
   }
 
   vec2 texc = oct_encode(normalize(probe_start));
@@ -667,52 +667,48 @@ int trace_hi_segment(
 
   float level = MAX_LEVEL;
   int iterations = 0;
-
-  vec3 ray = probe_start;
   
   vec2 delta = segment_end - texc;
   vec2 cross_step = vec2(delta.x >= 0.0 ? 1.0 : -1.0, delta.y >= 0.0 ? 1.0 : -1.0);
   vec2 cross_offset = cross_step * 0.00001;
-  
-  float init_cell_sz = TEX_SIZE.x * exp2(-3);
-  ivec2 init_cell = ivec2(floor(init_cell_sz * texc));
-  
-  /*texc = intersect_cell_boundary(texc, delta, init_cell, init_cell_sz, cross_step, cross_offset);
-  vec3 dir = oct_decode(texc);
-  float t = dist_to_intersection(ray_origin, ray_dir, dir);
-  ray = ray_origin + t * ray_dir;*/
 
-  while (level >= MIN_LEVEL && iterations < 32) {
-    vec3 temp_ray = ray;
-    vec2 temp_uv = texc;
-
+  while (iterations < 64) {
     float curr_cell_count = TEX_SIZE.x * exp2(-level);
-    ivec2 curr_cell = ivec2(floor(curr_cell_count * temp_uv));
+    ivec2 curr_cell = ivec2(floor(curr_cell_count * texc));
     
-    float ray_depth = dot(center_dir, temp_ray);
     float cell_depth = texelFetch(probe_dist, ivec3(curr_cell, probe_id), int(level)).r;
     float t_int = ray_plane_intersection(ray_origin, ray_dir, center_dir, cell_depth);
     
-    temp_ray = (ray_depth < cell_depth)? (ray_origin + ray_dir * t_int) : temp_ray;
+    vec3 temp_ray = ray_origin + ray_dir * t_int;
     vec2 uv_int = oct_encode(temp_ray);
+
+    float factor = dot(ray_dir, center_dir) * dot(segment_end - texc, uv_int - texc); //is ray behind surface? 
+
+    if (factor < 0 && level <= MIN_LEVEL) {
+      vec3 dir = oct_decode(texc);
+      float t = dist_to_intersection(ray_origin, ray_dir, dir);
+      vec3 ray = dir * t;
+      tmin = dot(ray - ray_origin, ray_dir);
+      return TRACE_RESULT_UNKNOWN;
+    }
+
+    uv_int = (factor > 0)? uv_int : texc;
     ivec2 int_cell = ivec2(floor(curr_cell_count * uv_int));
 
     
     if (int_cell.x != curr_cell.x || int_cell.y != curr_cell.y) { //skip 
-      temp_uv = intersect_cell_boundary(texc, delta, curr_cell, curr_cell_count, cross_step, cross_offset);
+      texc = intersect_cell_boundary(texc, delta, curr_cell, curr_cell_count, cross_step, cross_offset);
       level = min(level + 2, MAX_LEVEL + 1);
     } else {
-      temp_uv = uv_int;
+      texc = uv_int;
+      if (level == MIN_LEVEL) {
+        break;
+      }
     }
 
     iterations++;
     level -= 1.f;
-
-    
-    texc = temp_uv;
-    vec3 dir = oct_decode(texc);
-    float t = dist_to_intersection(ray_origin, ray_dir, dir);
-    ray = dir * t;
+    level = max(level, 0.f);
 
     vec2 texc_dir = normalize(segment_end - texc);
     if (dot(texc_dir, segment_end - texc) <= INV_TEX_SIZE.x) {
@@ -723,14 +719,15 @@ int trace_hi_segment(
   hit_texc = texc;
   
   float depth_at_hit = texelFetch(probe_dist, ivec3(ivec2(texc * TEX_SIZE), probe_id), 0).r;
+  vec3 dir = oct_decode(texc);
+  float t = dist_to_intersection(ray_origin, ray_dir, dir);
+  vec3 ray = dir * t;
+  
   float ray_depth = dot(ray, center_dir);
 
-  if (abs(ray_depth - depth_at_hit) < 0.3) {
+  if (abs(ray_depth - depth_at_hit) < 0.1) {
     tmax = dot(ray - ray_origin, ray_dir)/dot(ray_dir, ray_dir);
     return TRACE_RESULT_HIT;
-  } else {
-    tmin = dot(ray - ray_origin, ray_dir)/dot(ray_dir, ray_dir);
-    return TRACE_RESULT_UNKNOWN;
   }
 
   return TRACE_RESULT_MISS;
